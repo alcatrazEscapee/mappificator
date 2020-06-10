@@ -1,0 +1,7 @@
+# PyCharm
+/venv/
+*.xml
+*.iml
+
+# Build
+/build/
