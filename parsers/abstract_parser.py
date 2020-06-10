@@ -1,7 +1,7 @@
 # A simple lexical scanner / parser, for simple text based parsing
 # Supports many common requirements for all mapping formats
 
-from typing import Optional, Set
+from typing import Optional, Set, Tuple
 
 
 class AbstractParser:
@@ -19,11 +19,15 @@ class AbstractParser:
     def next(self) -> str:
         return self.text[self.pointer]
 
-    def scan_until(self, end: str):
+    def scan_until(self, end: str) -> str:
+        identifier = ''
         while not self.eof():
             if self.try_scan(end):
+                identifier += end
                 break
+            identifier += self.next()
             self.pointer += 1
+        return identifier
 
     def scan(self, expected: str):
         if not self.try_scan(expected):
@@ -51,23 +55,29 @@ class AbstractParser:
             else:
                 return identifier
 
-    def scan_java_method_signature(self) -> int:
+    def scan_java_method_signature(self) -> Tuple[str, int]:
         self.scan('(')
+        identifier = '('
         params = 0
         while self.next() != ')':
-            self.scan_type()
+            identifier += self.scan_type()
             params += 1
         self.scan(')')
-        self.scan_type()
-        return params
+        identifier += ')'
+        identifier += self.scan_type()
+        return identifier, params
 
-    def scan_type(self):
+    def scan_type(self) -> str:
+        identifier = ''
         while self.next() == '[':
-            self.pointer += 1
+            self.scan('[')
+            identifier += '['
         if self.next() == 'L':
-            self.scan_until(';')
+            identifier += self.scan_until(';')
         else:
+            identifier += self.next()
             self.pointer += 1
+        return identifier
 
     def error(self, error_msg):
         print('Parser Error: %s' % error_msg)

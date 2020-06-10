@@ -20,12 +20,16 @@ class McpSrgParser(AbstractParser):
                 notch_member = self.scan_identifier()
                 self.scan(' ')
                 if self.next() == '(':
-                    params = self.scan_java_method_signature()
+                    params, amount = self.scan_java_method_signature()
                     self.scan(' ')
                     srg_method = self.scan_identifier()
                     self.methods[(notch_class, notch_member, params)] = srg_method
-                    for i in range(params):
-                        self.params[(notch_class, notch_member, params, i)] = srg_method.replace('func', 'p') + '_' + str(i)
+                    for i in range(amount):
+                        if srg_method.startswith('func_'):
+                            srg_param = 'p' + srg_method.replace('func', '')[:-2] + '_' + str(i) + '_'
+                        else:
+                            srg_param = 'p_' + srg_method + '_' + str(i) + '_'
+                        self.params[(notch_class, notch_member, params, i)] = srg_param
                 else:
                     srg_field = self.scan_identifier()
                     self.fields[(notch_class, notch_member)] = srg_field
