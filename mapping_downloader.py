@@ -1,26 +1,36 @@
 # Simple one-time downloader
 
-import zipfile
+import datetime
+import io
+import json
 import os
 import urllib.request
-import json
-import io
-import datetime
-
+import zipfile
 from typing import Tuple, Optional
+
+# There's probably an API for it but for sure it's not documented anywhere and asking is just going to receive a 'just read the code' so why bother
+MCP_SRG_EXTRA_RUBBISH = {
+    '1.15.2': '20200515.085601',
+    '1.15.1': '20191217.105819'
+}
 
 
 def load_yarn_v2(mc_version: str, yarn_version: Optional[str] = None) -> str:
     if yarn_version is None:
-        expected_path = './build/yarn_v2-%s' % mc_version
+        # find the newest build if it exists
+        yarn_mappings = sorted([f for f in os.listdir('./build/') if os.path.isfile('./build/' + f) and f.startswith('yarn_v2-%s' % mc_version)])
+        if yarn_mappings:
+            with open('./build/' + yarn_mappings[-1]) as f:
+                return f.read()
     else:
-        expected_path = './build/yarn_v2-%s+build.%s' % (mc_version, yarn_version)
-    if os.path.isfile(expected_path):
-        with open(expected_path) as f:
-            return f.read()
+        path = './build/yarn_v2-%s+build.%s.tiny' % (mc_version, yarn_version)
+        # find exact match
+        if os.path.isfile(path):
+            with open(path) as f:
+                return f.read()
 
     yarn, path = download_yarn_v2(mc_version, yarn_version)
-    with open('./build/' + path, 'w') as f:
+    with open('./build/' + path, 'w', encoding='utf-8') as f:
         f.write(yarn)
     return yarn
 
@@ -49,8 +59,26 @@ def download_yarn_v2(mc_version: str, yarn_version: Optional[str] = None) -> Tup
         with zipfile.ZipFile(fio, 'r') as tiny_zip:
             with tiny_zip.open('mappings/mappings.tiny') as f:
                 mappings = f.read().decode('utf-8').replace('\r\n', '\n')
-
     return mappings, path
+
+
+def load_yarn_intermediary(mc_version: str) -> str:
+    path = './build/yarn_intermediary-%s.tiny' % mc_version
+    if os.path.isfile(path):
+        with open(path) as f:
+            return f.read()
+
+    intermediary = download_yarn_intermediary(mc_version)
+    with open(path, 'w') as f:
+        f.write(intermediary)
+    return intermediary
+
+
+def download_yarn_intermediary(mc_version: str) -> str:
+    print('Downloading yarn_intermediary-%s.tiny' % mc_version)
+    url = 'https://raw.githubusercontent.com/FabricMC/intermediary/master/mappings//%s.tiny' % mc_version
+    with urllib.request.urlopen(url) as request:
+        return request.read().decode('utf-8').replace('\r\n', '\n')
 
 
 def load_mcp_mappings(mc_version: str, mcp_date: Optional[str] = None) -> Tuple[str, str, str]:
@@ -97,7 +125,7 @@ def download_mcp_mappings(mc_version: str, mcp_date: Optional[str] = None) -> Tu
     return methods, fields, params, path
 
 
-def load_mcp_srg(mc_version: str) -> str:
+def load_mcp_srg(mc_version: str, extra_rubbish: str = '') -> str:
     path = './build/mcp_srg-%s.tsrg' % mc_version
     if os.path.isfile(path):
         with open(path) as f:
@@ -110,7 +138,16 @@ def load_mcp_srg(mc_version: str) -> str:
 
 
 def download_mcp_srg(mc_version: str) -> str:
-    url = 'https://raw.githubusercontent.com/MinecraftForge/MCPConfig/master/versions/release/%s/joined.tsrg' % mc_version
-    with urllib.request.urlopen(url) as request:
-        joined = request.read().decode('utf-8').replace('\r\n', '\n')
+    extra_rubbish = MCP_SRG_EXTRA_RUBBISH[mc_version]
+    url = 'https://files.minecraftforge.net/maven/de/oceanlabs/mcp/mcp_config/%s-%s/mcp_config-%s-%s.zip' % (mc_version, extra_rubbish, mc_version, extra_rubbish)
+    try:
+        with urllib.request.urlopen(url) as request:
+            mcp_config = request.read()
+        with io.BytesIO(mcp_config) as fio:
+            with zipfile.ZipFile(fio, 'r') as mcp_config_zip:
+                with mcp_config_zip.open('config/joined.tsrg') as f:
+                    joined = f.read().decode('utf-8').replace('\r\n', '\n')
+    except:
+        print('Unable to download mcp_srg from %s' % repr(url))
+        raise
     return joined

@@ -1,5 +1,4 @@
 from parsers.abstract_parser import AbstractParser
-from mapping import Mapping
 
 
 class McpSrgParser(AbstractParser):
@@ -7,9 +6,9 @@ class McpSrgParser(AbstractParser):
     def __init__(self, text: str):
         super().__init__(text)
 
-        self.methods: Mapping.Method = {}
-        self.fields: Mapping.Field = {}
-        self.params: Mapping.Param = {}
+        self.methods = {}
+        self.fields = {}
+        self.params = {}
 
         while not self.eof():
             notch_class = self.scan_identifier()

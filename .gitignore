@@ -5,3 +5,7 @@
 
 # Build
 /build/
+*.log
+*.tiny
+*.tsrg
+*.csv

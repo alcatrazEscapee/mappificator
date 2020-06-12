@@ -5,9 +5,7 @@ from typing import Optional, Set, Tuple
 
 
 class AbstractParser:
-
-    IDENTIFIER_CHARS = set('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789/-_$;()[]')
-    JAVA_PARAMETER_CHARS = set()
+    IDENTIFIER_CHARS = set('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789/-_$;()[]<>')
 
     def __init__(self, text: str):
         self.text = text

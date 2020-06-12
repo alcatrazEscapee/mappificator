@@ -1,13 +1,10 @@
-
-from mapping import Mapping
-
 import csv
 
 
 class McpMappingParser:
 
     def __init__(self, text: str):
-        self.mappings: Mapping.Simple = {}
+        self.mappings = {}
 
         for row in csv.reader(text.split('\n')[1:]):
             if row:
