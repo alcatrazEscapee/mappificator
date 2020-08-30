@@ -5,6 +5,7 @@
 
 # Build
 /build/
+/logs/
 *.log
 *.tiny
 *.tsrg

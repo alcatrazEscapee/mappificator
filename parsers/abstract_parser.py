@@ -5,7 +5,20 @@ from typing import Optional, Set, Tuple
 
 
 class AbstractParser:
-    IDENTIFIER_CHARS = set('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789/-_$;()[]<>')
+    IDENTIFIER_CHARS = set('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789/-_$;()[]<>.,')
+    NUMERIC_CHARS = set('0123456789')
+
+    FIELD_DESCRIPTOR_NAMES = {
+        'byte': 'B',
+        'char': 'C',
+        'double': 'D',
+        'float': 'F',
+        'int': 'I',
+        'long': 'J',
+        'short': 'S',
+        'boolean': 'Z',
+        'void': 'V'
+    }
 
     def __init__(self, text: str):
         self.text = text
@@ -83,3 +96,18 @@ class AbstractParser:
         print('Around: %s' % repr(self.text[self.pointer - 3:self.pointer + 3]))
         print('Line %d:\n%s' % (line_num, repr(self.text.split('\n')[line_num])))
         raise RuntimeError('Stacktrace')
+
+    @staticmethod
+    def convert_type_to_descriptor(name: str):
+        desc = ''
+        # Array levels
+        while len(name) > 2 and name[-2:] == '[]':
+            name = name[:-2]
+            desc += '['
+        if name in AbstractParser.FIELD_DESCRIPTOR_NAMES:
+            # Primitive type
+            desc += AbstractParser.FIELD_DESCRIPTOR_NAMES[name]
+        else:
+            # Object
+            desc += 'L' + name + ';'
+        return desc

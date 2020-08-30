@@ -1,65 +1,90 @@
 # This is why we can't have nice things
 
 from collections import defaultdict
+from typing import Dict
 
+import logging
 import mapping_downloader
 
 from parsers.mcp_mapping_parser import McpMappingParser
 from parsers.mcp_srg_parser import McpSrgParser
 from parsers.yarn_intermediary_parser import YarnIntermediaryParser
 from parsers.yarn_v2_mapping_parser import YarnV2MappingParser
+from parsers.official_parser import OfficialParser
 
 from source_map import SourceMap
 
 
 def main():
-    with open('./output.log', 'w') as f:
-        methods, fields, params = mapping_downloader.load_mcp_mappings('1.15.1')
-        methods, fields, params = McpMappingParser(methods), McpMappingParser(fields), McpMappingParser(params)
-        mcp = SourceMap(fields.mappings, methods.mappings, params.mappings)
+    logging.basicConfig(filename='logs/output.log', level=logging.INFO, filemode='w')
 
-        srg = mapping_downloader.load_mcp_srg('1.15.2')
-        srg = McpSrgParser(srg)
-        srg = SourceMap(srg.fields, srg.methods, srg.params)
+    print('Reading mappings...\n')
 
-        intermediary = mapping_downloader.load_yarn_intermediary('1.16-pre4')
-        intermediary = YarnIntermediaryParser(intermediary)
-        intermediary = SourceMap(intermediary.fields, intermediary.methods, intermediary.params)
+    methods_raw, fields_raw, params_raw = mapping_downloader.load_mcp_mappings('1.16.1', '20200723')
+    methods_parser, fields_parser, params_parser = McpMappingParser(methods_raw), McpMappingParser(fields_raw), McpMappingParser(params_raw)
+    mcp = SourceMap(fields_parser.mappings, methods_parser.mappings, params_parser.mappings)
 
-        yarn = mapping_downloader.load_yarn_v2('1.16-pre4')
-        yarn = YarnV2MappingParser(yarn)
-        yarn = SourceMap(yarn.fields, yarn.methods, yarn.params)
+    methods_raw, fields_raw, params_raw = mapping_downloader.load_yarn2mcp_mappings('1.16.2', '20200830')
+    methods_parser, fields_parser, params_parser = McpMappingParser(methods_raw), McpMappingParser(fields_raw), McpMappingParser(params_raw)
+    yarn2mcp = SourceMap(fields_parser.mappings, methods_parser.mappings, params_parser.mappings)
 
-        fix_intermediary_inheritance(f, intermediary.methods, intermediary.params, srg.methods, srg.params, yarn.methods)
-        srg_intermediary = map_srg_to_yarn(f, srg, intermediary, yarn)
+    methods_raw, fields_raw, params_raw = mapping_downloader.load_yarn2mcp_mappings('1.16.2', '20200830', 'yarn')
+    methods_parser, fields_parser, params_parser = McpMappingParser(methods_raw), McpMappingParser(fields_raw), McpMappingParser(params_raw)
+    yarn2mcp_yarn = SourceMap(fields_parser.mappings, methods_parser.mappings, params_parser.mappings)
 
-        print('Notch -> Intermediary', intermediary)
-        print('Notch -> SRG', srg)
-        print('Intermediary -> Yarn', yarn)
-        print('SRG -> MCP', mcp)
+    srg_raw = mapping_downloader.load_mcp_srg('1.16.2')
+    srg_parser = McpSrgParser(srg_raw)
+    srg = SourceMap(srg_parser.fields, srg_parser.methods, srg_parser.params)
 
-        print('Notch (Intermediary, SRG)', intermediary.keys(), srg.keys())
-        print('Intermediary', intermediary.values())
-        print('SRG', srg.values())
+    intermediary_raw = mapping_downloader.load_yarn_intermediary('1.16.2')
+    intermediary_parser = YarnIntermediaryParser(intermediary_raw)
+    intermediary = SourceMap(intermediary_parser.fields, intermediary_parser.methods, intermediary_parser.params)
 
-        print('SRG -> Intermediary', srg_intermediary)
+    yarn_raw = mapping_downloader.load_yarn_v2('1.16.2')
+    yarn_parser = YarnV2MappingParser(yarn_raw)
+    yarn = SourceMap(yarn_parser.fields, yarn_parser.methods, yarn_parser.params)
 
-        mixed = SourceMap.compose_layered([
-            mcp,
-            srg_intermediary.compose(yarn)
-        ])
-        srg_yarn = srg_intermediary.compose(yarn)
+    client, server = mapping_downloader.load_official('1.16.2')
+    client_parser, server_parser = OfficialParser(client), OfficialParser(server)
+    official_client, official_server = SourceMap(client_parser.fields, client_parser.methods), SourceMap(server_parser.fields, server_parser.methods)
 
-        print('Mixed MCP, Yarn', mixed)
-        print('Srg -> Yarn', srg_yarn)
+    print('Fixing Intermediary Inheritance')
+    fix_intermediary_inheritance(intermediary.methods, intermediary.params, srg.methods, srg.params, yarn.methods)
+    srg_intermediary = map_srg_to_yarn(srg, intermediary, yarn)
 
-        print('MCP', mcp.compare_to(srg.values()))
-        print('Mixed MCP, Yarn', mixed.compare_to(srg.values()))
-        print('Yarn', srg_yarn.compare_to(srg.values()))
+    print('\nResults\n')
+
+    print('Notch -> Official (Client)', official_client)
+    print('Notch -> Official (Server)', official_server)
+    print('Notch -> Intermediary', intermediary)
+    print('Notch -> SRG', srg)
+    print('Intermediary -> Yarn', yarn)
+    print('SRG -> MCP', mcp)
+    print('SRG -> Yarn2Mcp (Mixed)', yarn2mcp)
+    print('SRG -> Yarn2Mcp (Yarn)', yarn2mcp_yarn)
+
+    print('Notch (Intermediary, SRG)', intermediary.keys(), srg.keys())
+    print('Intermediary', intermediary.values())
+    print('SRG', srg.values())
+
+    print('SRG -> Intermediary', srg_intermediary)
+
+    mixed = SourceMap.compose_layered([
+        mcp,
+        srg_intermediary.compose(yarn)
+    ])
+
+    print('Mixed MCP, Yarn', mixed)
+
+    print('MCP', mcp.compare_to(srg.values()))
+    print('Yarn', yarn.compare_to(srg.values()))
+    print('Mixed MCP, Yarn', mixed.compare_to(srg.values()))
+    print('Yarn2Mcp (Mixed)', yarn2mcp.compare_to(srg.values()))
+    print('Yarn2Mcp (Yarn)', yarn2mcp_yarn.compare_to(srg.values()))
 
 
-def fix_intermediary_inheritance(log_writer, intermediary_methods, intermediary_params, srg_methods, srg_params, yarn_methods):
-    log_writer.write('### Fixing Intermediary Inheritance ###\n')
+def fix_intermediary_inheritance(intermediary_methods: Dict, intermediary_params: Dict, srg_methods: Dict, srg_params: Dict, yarn_methods: Dict):
+    logging.info('### Fixing Intermediary Inheritance ###')
 
     # build an inverse srg map
     inverse_srg_methods = defaultdict(list)
@@ -85,12 +110,12 @@ def fix_intermediary_inheritance(log_writer, intermediary_methods, intermediary_
             for i in range(srg_param_counts[missing]):
                 intermediary_params[(*missing, i)] = intermediary_methods[match] + '_' + str(i)
         elif unique_intermediary_matches == 0:
-            log_writer.write('[Intermediary Inheritance Fix] No match: %s\n' % str(missing))
+            logging.info('[Intermediary Inheritance Fix] No match: %s' % str(missing))
         else:
             # one reason why this happens: a method is overridden with a widened type
             # in this case we actually rely on the yarn mappings to detect if there are actual duplicates, as it won't compile otherwise
             if any(m not in yarn_methods for m in intermediary_matches):
-                log_writer.write('[Intermediary Inheritance Fix] Multiple matches without yarn names for %s -> %s -> %s -> %s\n' % (missing, srg_methods[missing], matches, [intermediary_methods[m] for m in matches]))
+                logging.info('[Intermediary Inheritance Fix] Multiple matches without yarn names for %s -> %s -> %s -> %s' % (missing, srg_methods[missing], matches, [intermediary_methods[m] for m in matches]))
             else:
                 yarn = set(yarn_methods[m] for m in intermediary_matches)
                 if len(yarn) == 1:
@@ -99,13 +124,13 @@ def fix_intermediary_inheritance(log_writer, intermediary_methods, intermediary_
                     intermediary_methods[missing] = intermediary_methods[match]
                     for i in range(srg_param_counts[missing]):
                         intermediary_params[(*missing, i)] = intermediary_methods[match] + '_' + str(i)
-                    log_writer.write('[Intermediary Inheritance Fix] Multiple similar matches detected: %s -> %s -> %s -> %s. Choosing %s\n' % (missing, srg_methods[missing], matches, [intermediary_methods[m] for m in matches], match))
+                    logging.info('[Intermediary Inheritance Fix] Multiple similar matches detected: %s -> %s -> %s -> %s. Choosing %s' % (missing, srg_methods[missing], matches, [intermediary_methods[m] for m in matches], match))
                 else:
                     matches = list(matches)
-                    log_writer.write('[Intermediary Inheritance Fix] Multiple distinct matches for %s -> %s -> %s -> %s -> %s\n' % (missing, srg_methods[missing], matches, [intermediary_methods[m] for m in matches], [yarn_methods[m] for m in intermediary_matches]))
+                    logging.info('[Intermediary Inheritance Fix] Multiple distinct matches for %s -> %s -> %s -> %s -> %s' % (missing, srg_methods[missing], matches, [intermediary_methods[m] for m in matches], [yarn_methods[m] for m in intermediary_matches]))
 
 
-def map_srg_to_yarn(log_writer, srg, intermediary, yarn):
+def map_srg_to_yarn(srg: SourceMap, intermediary: SourceMap, yarn: SourceMap):
     # Iterate through each map type
     mixed_maps = [dict(), dict(), dict()]
     names = ['fields', 'methods', 'params']
@@ -122,10 +147,10 @@ def map_srg_to_yarn(log_writer, srg, intermediary, yarn):
                 match = matches.pop()
                 mixed_map[v] = match
             elif unique_matches == 0:
-                log_writer.write('[SRG -> Intermediary] No matches for %s %s -> %s\n' % (name, v, inverse_srg_map[v]))
+                logging.info('[SRG -> Intermediary] No matches for %s %s -> %s' % (name, v, inverse_srg_map[v]))
             else:
                 if any(m not in yarn_map for m in matches):
-                    log_writer.write('[SRG -> Intermediary] Multiple matches without yarn names for %s %s -> %s -> %s\n' % (name, v, inverse_srg_map[v], matches))
+                    logging.info('[SRG -> Intermediary] Multiple matches without yarn names for %s %s -> %s -> %s' % (name, v, inverse_srg_map[v], matches))
                 else:
                     yarn = set(yarn_map[m] for m in matches)
                     if len(yarn) == 1:
@@ -133,7 +158,7 @@ def map_srg_to_yarn(log_writer, srg, intermediary, yarn):
                         match = matches.pop()
                         mixed_map[v] = match
                     else:
-                        log_writer.write('[SRG -> Intermediary] Multiple distinct matches without yarn names for %s %s -> %s -> %s\n' % (name, v, inverse_srg_map[v], matches))
+                        logging.info('[SRG -> Intermediary] Multiple distinct matches without yarn names for %s %s -> %s -> %s' % (name, v, inverse_srg_map[v], matches))
 
     return SourceMap(*mixed_maps)
 

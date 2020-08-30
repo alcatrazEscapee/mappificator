@@ -36,9 +36,6 @@ class SourceMap:
     def maps(self) -> Tuple[Mapping, Mapping, Mapping]:
         return self.fields, self.methods, self.params
 
-    def inverse(self) -> 'SourceMap':
-        raise RuntimeError('SourceMap cannot be inverted')
-
     def compose(self, other: 'SourceMap') -> 'SourceMap':
         return SourceMap.compose_direct(self, other)
 
