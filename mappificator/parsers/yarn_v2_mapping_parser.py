@@ -1,4 +1,4 @@
-from parsers.abstract_parser import AbstractParser
+from mappificator.parsers.abstract_parser import AbstractParser
 
 
 class YarnV2MappingParser(AbstractParser):

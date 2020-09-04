@@ -1,7 +1,7 @@
 # A simple lexical scanner / parser, for simple text based parsing
 # Supports many common requirements for all mapping formats
 
-from typing import Optional, Set, Tuple
+from typing import Optional, Set, Tuple, Dict
 
 
 class AbstractParser:
@@ -19,6 +19,7 @@ class AbstractParser:
         'boolean': 'Z',
         'void': 'V'
     }
+    FIELD_DESCRIPTOR_NAMES_INVERSE = dict((v, k) for k, v in FIELD_DESCRIPTOR_NAMES.items())
 
     def __init__(self, text: str):
         self.text = text
@@ -98,7 +99,7 @@ class AbstractParser:
         raise RuntimeError('Stacktrace')
 
     @staticmethod
-    def convert_type_to_descriptor(name: str):
+    def convert_type_to_descriptor(name: str, remap: Dict[str, str]):
         desc = ''
         # Array levels
         while len(name) > 2 and name[-2:] == '[]':
@@ -109,5 +110,33 @@ class AbstractParser:
             desc += AbstractParser.FIELD_DESCRIPTOR_NAMES[name]
         else:
             # Object
+            if name in remap:
+                name = remap[name]
             desc += 'L' + name + ';'
         return desc
+
+    @staticmethod
+    def convert_descriptor_to_type(desc: str, remap: Dict[str, str]):
+        name = desc[:]
+        while name.startswith('['):
+            name = name[1:]
+        if name in AbstractParser.FIELD_DESCRIPTOR_NAMES_INVERSE:
+            return AbstractParser.FIELD_DESCRIPTOR_NAMES_INVERSE[name]
+        elif name.startswith('L') and name.endswith(';'):
+            name = name[1:-1]
+            if name in remap:
+                name = remap[name]
+            return name
+        else:
+            raise ValueError('The provided descriptor %s was not a valid type descriptor' % desc)
+
+    @staticmethod
+    def decode_java_method_descriptor(desc: str):
+        parser = AbstractParser(desc)
+        parser.scan('(')
+        params = []
+        while parser.next() != ')':
+            params.append(parser.scan_type())
+        parser.scan(')')
+        ret_type = parser.scan_type()
+        return ret_type, params
