@@ -7,13 +7,12 @@ import datetime
 import io
 import json
 import os
-import urllib.request
 import urllib.error
+import urllib.request
 import zipfile
 from typing import Tuple, Optional, Any
 
-
-CACHE_LOCATION = './build/'
+CACHE_LOCATION = '../build/'
 OFFICIAL_MAPPINGS = {
     '1.16.2': {
         'client': 'https://launcher.mojang.com/v1/objects/16d12d67cd5341bfc848340f61f3ff6b957537fe/client.txt',
@@ -199,20 +198,31 @@ def download_yarn2mcp_mappings(mc_version: str, mcp_date: str, mix_type: str) ->
     return methods, fields, params, path
 
 
-def load_mcp_srg(mc_version: str) -> str:
-    path = CACHE_LOCATION + 'mcp_srg-%s.tsrg' % mc_version
-    if os.path.isfile(path):
+def load_mcp_srg(mc_version: str) -> Tuple[str, str, str]:
+    path = CACHE_LOCATION + 'mcpconfig-%s' % mc_version
+    if os.path.isdir(path):
         print('Loading %s' % path)
-        with open(path) as f:
-            return f.read()
+        with open(path + '/joined.tsrg') as f:
+            joined = f.read()
+        with open(path + '/static_methods.txt') as f:
+            static_methods = f.read()
+        with open(path + '/constructors.txt') as f:
+            constructors = f.read()
+        return joined, static_methods, constructors
 
-    joined = download_mcp_srg(mc_version)
-    with open(path, 'w') as f:
+    joined, static_methods, constructors = download_mcp_srg(mc_version)
+    if not os.path.isdir(path):
+        os.mkdir(path)
+    with open(path + '/joined.tsrg', 'w') as f:
         f.write(joined)
-    return joined
+    with open(path + '/static_methods.txt', 'w') as f:
+        f.write(static_methods)
+    with open(path + '/constructors.txt', 'w') as f:
+        f.write(constructors)
+    return joined, static_methods, constructors
 
 
-def download_mcp_srg(mc_version: str) -> str:
+def download_mcp_srg(mc_version: str) -> Tuple[str, str, str]:
     url = 'https://files.minecraftforge.net/maven/de/oceanlabs/mcp/mcp_config/%s/mcp_config-%s.zip' % (mc_version, mc_version)
     try:
         with urllib.request.urlopen(url) as request:
@@ -221,7 +231,11 @@ def download_mcp_srg(mc_version: str) -> str:
             with zipfile.ZipFile(fio, 'r') as mcp_config_zip:
                 with mcp_config_zip.open('config/joined.tsrg') as f:
                     joined = sanitize_utf8(f.read())
-        return joined
+                with mcp_config_zip.open('config/static_methods.txt') as f:
+                    static_methods = sanitize_utf8(f.read())
+                with mcp_config_zip.open('config/constructors.txt') as f:
+                    constructors = sanitize_utf8(f.read())
+        return joined, static_methods, constructors
     except:
         print('Unable to download mcp_srg from %s' % repr(url))
         raise
@@ -261,6 +275,31 @@ def download_official(mc_version: str, client_url: Optional[str] = None, server_
         return client, server
     except:
         print('Unable to download official from %s' % repr(OFFICIAL_MAPPINGS[mc_version]))
+        raise
+
+
+def load_mcp_spreadsheet():
+    path = CACHE_LOCATION + '1.16.2-forge-mms-spreadsheet.csv'
+    if os.path.isfile(path):
+        print('Loading ' + path)
+        with open(path) as f:
+            return f.read()
+
+    print('Downloading ' + path)
+    text = download_mcp_spreadsheet()
+    with open(path, 'w') as f:
+        f.write(text)
+
+    return text
+
+
+def download_mcp_spreadsheet():
+    url = 'https://docs.google.com/spreadsheets/d/14knNUYjYkKkGpW9VTyjtlhaCTUsPWRJ91GLOFX2d23Q/gviz/tq?tqx=out:csv&sheet=1.16.2Mappings'
+    try:
+        with urllib.request.urlopen(url) as request:
+            return sanitize_utf8(request.read())
+    except:
+        print('Unable to download mcp spreadsheet as csv')
         raise
 
 

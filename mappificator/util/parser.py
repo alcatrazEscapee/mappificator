@@ -1,11 +1,12 @@
 # A simple lexical scanner / parser, for simple text based parsing
 # Supports many common requirements for all mapping formats
 
-from typing import Optional, Set, Tuple, Dict
+from typing import Optional, Set, Tuple, Dict, List
 
 
-class AbstractParser:
+class Parser:
     IDENTIFIER_CHARS = set('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789/-_$;()[]<>.,')
+    ALPHA_CHARS = set('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz')
     NUMERIC_CHARS = set('0123456789')
 
     FIELD_DESCRIPTOR_NAMES = {
@@ -57,7 +58,7 @@ class AbstractParser:
 
     def scan_identifier(self, chars: Optional[Set[str]] = None) -> str:
         if chars is None:
-            chars = AbstractParser.IDENTIFIER_CHARS
+            chars = Parser.IDENTIFIER_CHARS
         identifier = ''
         while not self.eof():
             c = self.text[self.pointer]
@@ -67,17 +68,19 @@ class AbstractParser:
             else:
                 return identifier
 
-    def scan_java_method_signature(self) -> Tuple[str, int]:
+    def scan_java_method_descriptor(self) -> Tuple[str, List[str], str]:
         self.scan('(')
-        identifier = '('
-        params = 0
+        desc = '('
+        params = []
         while self.next() != ')':
-            identifier += self.scan_type()
-            params += 1
+            param = self.scan_type()
+            desc += param
+            params.append(param)
         self.scan(')')
-        identifier += ')'
-        identifier += self.scan_type()
-        return identifier, params
+        desc += ')'
+        ret_type = self.scan_type()
+        desc += ret_type
+        return ret_type, params, desc
 
     def scan_type(self) -> str:
         identifier = ''
@@ -105,9 +108,9 @@ class AbstractParser:
         while len(name) > 2 and name[-2:] == '[]':
             name = name[:-2]
             desc += '['
-        if name in AbstractParser.FIELD_DESCRIPTOR_NAMES:
+        if name in Parser.FIELD_DESCRIPTOR_NAMES:
             # Primitive type
-            desc += AbstractParser.FIELD_DESCRIPTOR_NAMES[name]
+            desc += Parser.FIELD_DESCRIPTOR_NAMES[name]
         else:
             # Object
             if name in remap:
@@ -120,8 +123,8 @@ class AbstractParser:
         name = desc[:]
         while name.startswith('['):
             name = name[1:]
-        if name in AbstractParser.FIELD_DESCRIPTOR_NAMES_INVERSE:
-            return AbstractParser.FIELD_DESCRIPTOR_NAMES_INVERSE[name]
+        if name in Parser.FIELD_DESCRIPTOR_NAMES_INVERSE:
+            return Parser.FIELD_DESCRIPTOR_NAMES_INVERSE[name]
         elif name.startswith('L') and name.endswith(';'):
             name = name[1:-1]
             if name in remap:
@@ -132,7 +135,7 @@ class AbstractParser:
 
     @staticmethod
     def decode_java_method_descriptor(desc: str):
-        parser = AbstractParser(desc)
+        parser = Parser(desc)
         parser.scan('(')
         params = []
         while parser.next() != ')':

@@ -1,8 +1,7 @@
 from typing import Mapping, Optional, Set, Callable, Any
 
-import mappificator.util.mapping_util as mapping_util
-
-from mappificator.source.source_set import SourceSet
+from mappificator.util import utils
+from mappificator.util.source_set import SourceSet
 
 
 class SourceMap:
@@ -31,39 +30,39 @@ class SourceMap:
     def filter_keys(self, keys: 'SourceSet', inverse: bool = False) -> 'SourceMap':
         """ Returns a new SourceMap which restricts the domain to a subset of the provided SourceSet """
         return SourceMap(
-            mapping_util.filter_keys(self.fields, keys.fields, inverse),
-            mapping_util.filter_keys(self.methods, keys.methods, inverse),
-            mapping_util.filter_keys(self.params, keys.params, inverse),
-            mapping_util.filter_keys(self.classes, keys.classes, inverse))
+            utils.filter_keys(self.fields, keys.fields, inverse),
+            utils.filter_keys(self.methods, keys.methods, inverse),
+            utils.filter_keys(self.params, keys.params, inverse),
+            utils.filter_keys(self.classes, keys.classes, inverse))
 
     def filter_values(self, values: 'SourceSet', inverse: bool = False) -> 'SourceMap':
         """ Returns a new SourceMap which restricts the codomain to a subset of the provided SourceSet """
         return SourceMap(
-            mapping_util.filter_values(self.fields, values.fields, inverse),
-            mapping_util.filter_values(self.methods, values.methods, inverse),
-            mapping_util.filter_values(self.params, values.params, inverse),
-            mapping_util.filter_values(self.classes, values.classes, inverse))
+            utils.filter_values(self.fields, values.fields, inverse),
+            utils.filter_values(self.methods, values.methods, inverse),
+            utils.filter_values(self.params, values.params, inverse),
+            utils.filter_values(self.classes, values.classes, inverse))
 
     def filter(self, predicate: Callable[[Any, Any], bool]):
         return SourceMap(
-            mapping_util.filter_mapping(self.fields, predicate),
-            mapping_util.filter_mapping(self.methods, predicate),
-            mapping_util.filter_mapping(self.params, predicate),
-            mapping_util.filter_mapping(self.classes, predicate))
+            utils.filter_mapping(self.fields, predicate),
+            utils.filter_mapping(self.methods, predicate),
+            utils.filter_mapping(self.params, predicate),
+            utils.filter_mapping(self.classes, predicate))
 
     def inverse(self) -> 'FuzzySourceMap':
         return FuzzySourceMap(
-            mapping_util.invert_mapping(self.fields),
-            mapping_util.invert_mapping(self.methods),
-            mapping_util.invert_mapping(self.params),
-            mapping_util.invert_mapping(self.classes))
+            utils.invert_mapping(self.fields),
+            utils.invert_mapping(self.methods),
+            utils.invert_mapping(self.params),
+            utils.invert_mapping(self.classes))
 
     def compose(self, other: 'SourceMap') -> 'SourceMap':
         return SourceMap(
-            mapping_util.compose_mapping(self.fields, other.fields),
-            mapping_util.compose_mapping(self.methods, other.methods),
-            mapping_util.compose_mapping(self.params, other.params),
-            mapping_util.compose_mapping(self.classes, other.classes))
+            utils.compose_mapping(self.fields, other.fields),
+            utils.compose_mapping(self.methods, other.methods),
+            utils.compose_mapping(self.params, other.params),
+            utils.compose_mapping(self.classes, other.classes))
 
     def __str__(self):
         return 'SourceMap: Methods = %d, Fields = %d, Params = %d, Classes = %d' % (len(self.methods), len(self.fields), len(self.params), len(self.classes))
@@ -83,10 +82,10 @@ class FuzzySourceMap(SourceMap):
 
     def compose(self, other: 'SourceMap') -> 'FuzzySourceMap':
         return FuzzySourceMap(
-            mapping_util.compose_fuzzy_mapping(self.fields, other.fields),
-            mapping_util.compose_fuzzy_mapping(self.methods, other.methods),
-            mapping_util.compose_fuzzy_mapping(self.params, other.params),
-            mapping_util.compose_fuzzy_mapping(self.classes, other.classes))
+            utils.compose_fuzzy_mapping(self.fields, other.fields),
+            utils.compose_fuzzy_mapping(self.methods, other.methods),
+            utils.compose_fuzzy_mapping(self.params, other.params),
+            utils.compose_fuzzy_mapping(self.classes, other.classes))
 
     def select(self, selector: Optional[Callable[[Set], Any]] = None) -> 'SourceMap':
         """ Using the provided selection strategy, converts this to a functional mapping by only referencing individual values in the codomain. """

@@ -1,12 +1,6 @@
-# PyCharm
-/venv/
-*.xml
-*.iml
-
-# Build
-/build/
-/logs/
-*.log
-*.tiny
-*.tsrg
-*.csv
+# Reverse gitignore - explicitly include files
+*
+!*/
+!.gitignore
+!README.md
+!mappificator/**/*.py

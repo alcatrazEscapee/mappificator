@@ -27,4 +27,5 @@ class SourceSetComparison:
 
         self.left_only: 'SourceSet' = SourceSet(left.fields - right.fields, left.methods - right.methods, left.params - right.params, left.classes - right.classes)
         self.right_only: 'SourceSet' = SourceSet(right.fields - left.fields, right.methods - left.methods, right.params - left.params, right.classes - left.classes)
-        self.both: 'SourceSet' = SourceSet(left.fields | right.fields, left.methods | right.methods, left.params | right.params, left.classes | right.classes)
+        self.union: 'SourceSet' = SourceSet(left.fields | right.fields, left.methods | right.methods, left.params | right.params, left.classes | right.classes)
+        self.intersect: 'SourceSet' = SourceSet(left.fields & right.fields, left.methods & right.methods, left.params & right.params, left.classes & right.classes)

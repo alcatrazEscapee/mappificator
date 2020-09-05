@@ -1,14 +1,24 @@
-
-import os
 import csv
-import zipfile
+import os
 import subprocess
-from typing import Mapping, Optional, Callable
+import zipfile
+from typing import Dict, Tuple, Mapping, Optional
 
-from mappificator.source.source_map import SourceMap
+from mappificator.util import mapping_downloader
+from mappificator.util.source_map import SourceMap
 
 
-def build_and_publish_mcp_export(version: str, path: str, source_map: SourceMap, field_comments: Optional[Mapping] = None, method_comments: Optional[Mapping] = None, log_output: Optional[Callable[[str], None]] = None):
+def read(mc_version: str, mcp_date: Optional[str] = None) -> Tuple[SourceMap, Dict[str, str], Dict[str, str]]:
+    methods, fields, params = mapping_downloader.load_mcp_mappings(mc_version, mcp_date)
+
+    methods, method_comments = parse_mcp(methods)
+    fields, fields_comments = parse_mcp(fields)
+    params = parse_mcp_params(params)
+
+    return SourceMap(fields, methods, params), method_comments, fields_comments
+
+
+def write(version: str, path: str, source_map: SourceMap, field_comments: Optional[Mapping] = None, method_comments: Optional[Mapping] = None):
     fields_comments = field_comments if field_comments is not None else dict()
     method_comments = method_comments if method_comments is not None else dict()
 
@@ -22,6 +32,8 @@ def build_and_publish_mcp_export(version: str, path: str, source_map: SourceMap,
         f.writestr('fields.csv', fields_txt)
         f.writestr('methods.csv', methods_txt)
 
+
+def publish(version: str, path: str):
     file_path = os.path.join(path, 'mcp_snapshot-%s.zip' % version)
     if not os.path.isfile(file_path):
         raise ValueError('Must first build export before publishing to maven local')
@@ -30,7 +42,7 @@ def build_and_publish_mcp_export(version: str, path: str, source_map: SourceMap,
     while proc.poll() is None:
         output = proc.stdout.readline().decode('utf-8').replace('\r', '').replace('\n', '')
         if output != '':
-            log_output(output)
+            print(output)
     mvn_ret_code = proc.wait()  # catch return code
     if mvn_ret_code != 0:
         raise ValueError('Maven install returned error code %s' % str(mvn_ret_code))
@@ -49,11 +61,34 @@ class BufferedWriter:
         return ''.join(self.buffer)
 
 
+def parse_mcp(text: str) -> Tuple[Dict[str, str], Dict[str, str]]:
+    mappings = {}
+    comments = {}
+
+    for row in csv.reader(text.split('\n')[1:]):
+        if row:
+            mappings[row[0]] = row[1]
+            if row[3] != '':
+                comments[row[0]] = row[3]
+
+    return mappings, comments
+
+
+def parse_mcp_params(text: str) -> Dict[str, str]:
+    mappings = {}
+
+    for row in csv.reader(text.split('\n')[1:]):
+        if row:
+            mappings[row[0]] = row[1]
+
+    return mappings
+
+
 def write_csv_fields_or_methods(data: Mapping, comments: Mapping) -> BufferedWriter:
     writer = BufferedWriter()
     csv_writer = csv.writer(writer, lineterminator='\n')
     csv_writer.writerow(['searge', 'name', 'side', 'desc'])
-    for srg, named in sorted(data.items(), key=lambda t: srg_sort(t[0])):
+    for srg, named in sorted(data.items()):
         comment = comments[srg] if srg in comments else ''
         csv_writer.writerow([srg, named, '2', comment])  # side is ignored by FG
     return writer
@@ -63,13 +98,6 @@ def write_csv_params(params: Mapping) -> BufferedWriter:
     writer = BufferedWriter()
     csv_writer = csv.writer(writer, lineterminator='\n')
     csv_writer.writerow(['param', 'name', 'side'])
-    for srg, named in sorted(params.items(), key=lambda t: srg_sort(t[0])):
+    for srg, named in sorted(params.items()):
         csv_writer.writerow([srg, named, '2'])  # side is ignored by FG
     return writer
-
-
-def srg_sort(k: str) -> int:
-    try:
-        return int(k.split('_')[1])
-    except ValueError:
-        return 0

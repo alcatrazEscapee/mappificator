@@ -1,7 +1,9 @@
-from mappificator.parsers.abstract_parser import AbstractParser
+# todo: rewrite
+
+from mappificator.util.parser import Parser
 
 
-class YarnV2MappingParser(AbstractParser):
+class YarnV2MappingParser(Parser):
 
     def __init__(self, text: str):
         super().__init__(text)

@@ -1,3 +1,5 @@
+# todo: rewrite
+
 import csv
 
 
