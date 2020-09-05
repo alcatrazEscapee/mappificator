@@ -122,6 +122,6 @@ def generate_srg_params(methods: Dict, static_methods: Set, constructors: Dict) 
             else:
                 param_index += 1
 
-            grouped_params.add(frozenset(group))
+        grouped_params.add(frozenset(group))
 
     return params, grouped_params

@@ -12,8 +12,8 @@ def main():
     # 'complete' identifies the methodology
     # '20200723' is the mcp bot export used
     # '1.16.2' is the minecraft version
-    # 'v1' in case we need additional modifications
-    version = 'complete-20200723-1.16.2-v1'
+    # 'v2' is the current iteration
+    version = 'complete-20200723-1.16.2-v2'
 
     print('Reading mappings...')
 
