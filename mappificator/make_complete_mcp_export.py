@@ -15,7 +15,7 @@ def main():
     # '20200723' is the mcp bot export used
     # '1.16.2' is the minecraft version
     # 'v3' is the current iteration
-    version = 'complete-20200723-1.16.2-v6'
+    version = 'complete-20200723-1.16.2-v7'
 
     print('Reading mappings...')
 
@@ -92,6 +92,17 @@ def generate_param_names(srg: SourceMap, srg_indexed_params: Dict[str, Dict[Any,
     # Generate parameter names
     # This is done in stages, to account for possible conflicts between parameter groups
     # Both lambdas and anon. classes may cause conflicts within the same class
+
+    # The set of param names which match class names. These are denied ('In' is suffixed) in order to prevent conflicts with local variables
+    reserved_class_name_params = set()
+    for srg_class in srg.classes.values():
+        if '/' in srg_class:  # Remove packages
+            srg_class = srg_class.split('/')[-1]
+        if '$' in srg_class:  # Ignore inner classes for this rule
+            srg_class = srg_class.split('$')[-1]
+        srg_class = srg_class.lower()  # lowercase the entire class name
+        reserved_class_name_params.add(srg_class)
+
     for notch_class, entries in srg_indexed_params.items():
 
         class_groups = []  # groups that need to be checked for conflicts at a class level
@@ -127,6 +138,9 @@ def generate_param_names(srg: SourceMap, srg_indexed_params: Dict[str, Dict[Any,
                     # Auto-generate name based on class name
                     name = generate_param_name(param_type, srg.classes, reserved_names)
 
+                while name in reserved_class_name_params:
+                    name = name + 'In'  # prevent local variable conflicts
+
                 if name in reserved_names:
                     if name in result.params:
                         raise ValueError('A parameter conflicts with one that is already assigned!')
@@ -148,6 +162,9 @@ def generate_param_names(srg: SourceMap, srg_indexed_params: Dict[str, Dict[Any,
                 else:
                     # Auto-generate name based on class name
                     name = generate_param_name(param_type, srg.classes, class_reserved_names)
+
+                while name in reserved_class_name_params:
+                    name = name + 'In'  # prevent local variable conflicts
 
                 if name in class_reserved_names:
                     if name in result.params:
