@@ -1,20 +1,20 @@
-from typing import Dict, Tuple, Set, FrozenSet
+from typing import Dict, Tuple, Set, Any
 
-from mappificator.util import mapping_downloader
+from mappificator.util import mapping_downloader, utils
 from mappificator.util.parser import Parser
 from mappificator.util.source_map import SourceMap
 
 
-def read(mc_version: str) -> Tuple[SourceMap, Set[FrozenSet]]:
+def read(mc_version: str) -> Tuple[SourceMap, Dict[str, Dict[Any, Set]]]:
     joined, static_methods, constructors = mapping_downloader.download_mcp_srg(mc_version)
 
     classes, methods, fields = parse_mcpconfig_joined_tsrg(joined)
     static_methods = parse_mcpconfig_static_methods(static_methods)
     constructors = parse_mcpconfig_constructors(constructors)
 
-    params, grouped_params = generate_srg_params(methods, static_methods, constructors)
+    params, indexed_params = generate_srg_params(classes, methods, static_methods, constructors)
 
-    return SourceMap(fields, methods, params, classes), grouped_params
+    return SourceMap(fields, methods, params, classes), indexed_params
 
 
 def parse_mcpconfig_joined_tsrg(srg_joined: str) -> Tuple[Dict, Dict, Dict]:
@@ -76,13 +76,13 @@ def parse_mcpconfig_constructors(srg_constructors: str) -> Dict:
     return constructors
 
 
-def generate_srg_params(methods: Dict, static_methods: Set, constructors: Dict) -> Tuple[Dict, Set[FrozenSet]]:
+def generate_srg_params(classes: Dict, methods: Dict, static_methods: Set, constructors: Dict) -> Tuple[Dict, Dict[str, Dict[Any, Set]]]:
     """
     Generate srg named parameters by looking through method and constructors
 
     """
     params = {}
-    grouped_params = set()
+    indexed_params = {}  # class -> method -> params
     for method, srg_method in methods.items():
         group = set()
         notch_class, notch_method, method_desc = method
@@ -105,23 +105,45 @@ def generate_srg_params(methods: Dict, static_methods: Set, constructors: Dict) 
             else:
                 param_index += 1
 
-        grouped_params.add(frozenset(group))
+        # Identify if this class is an anon. class by name
+        if '$' in notch_class and notch_class.split('$')[-1].isnumeric():
+            notch_class_key = notch_class[:notch_class.rindex('$')]  # skip the $[number] at the end, identify by the non-anon. class
+            method_key = (notch_class, notch_method, method_desc)
+        else:
+            notch_class_key = notch_class
+            method_key = (None, notch_method, method_desc)
+        if notch_class_key not in indexed_params:
+            indexed_params[notch_class_key] = {}
+        indexed_params[notch_class_key][method_key] = group
 
+    reverse_classes = utils.invert_injective_mapping(classes)
     for method, srg_id in constructors.items():
         group = set()
-        notch_class, _, method_desc = method
-        _, param_types = Parser.decode_java_method_descriptor(method_desc)
+        srg_class, _, method_desc = method
+        if srg_class in reverse_classes:
+            notch_class = reverse_classes[srg_class]
 
-        param_index = 1
-        for param_type in param_types:
-            srg_param = 'p_i' + str(srg_id) + '_' + str(param_index) + '_'
-            params[(notch_class, '<init>', method_desc, param_index)] = srg_param
-            group.add((srg_param, param_type))
-            if param_type in ('J', 'D'):
-                param_index += 2
+            _, param_types = Parser.decode_java_method_descriptor(method_desc)
+
+            param_index = 1
+            for param_type in param_types:
+                srg_param = 'p_i' + str(srg_id) + '_' + str(param_index) + '_'
+                params[(notch_class, '<init>', method_desc, param_index)] = srg_param
+                group.add((srg_param, param_type))
+                if param_type in ('J', 'D'):
+                    param_index += 2
+                else:
+                    param_index += 1
+
+            # Identify if this class is an anon. class by name
+            if '$' in notch_class and notch_class.split('$')[-1].isnumeric():
+                notch_class_key = notch_class[:notch_class.rindex('$')]  # skip the $[number] at the end, identify by the non-anon. class
+                method_key = (notch_class, '<init>', method_desc)
             else:
-                param_index += 1
+                notch_class_key = notch_class
+                method_key = (None, '<init>', method_desc)
+            if notch_class_key not in indexed_params:
+                indexed_params[notch_class_key] = {}
+            indexed_params[notch_class_key][method_key] = group
 
-        grouped_params.add(frozenset(group))
-
-    return params, grouped_params
+    return params, indexed_params

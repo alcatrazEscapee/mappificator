@@ -119,17 +119,19 @@ class Parser:
         return desc
 
     @staticmethod
-    def convert_descriptor_to_type(desc: str, remap: Dict[str, str]):
+    def convert_descriptor_to_type(desc: str, remap: Dict[str, str]) -> Tuple[str, int]:
         name = desc[:]
+        arrays = 0
         while name.startswith('['):
             name = name[1:]
+            arrays += 1
         if name in Parser.FIELD_DESCRIPTOR_NAMES_INVERSE:
-            return Parser.FIELD_DESCRIPTOR_NAMES_INVERSE[name]
+            return Parser.FIELD_DESCRIPTOR_NAMES_INVERSE[name], arrays
         elif name.startswith('L') and name.endswith(';'):
             name = name[1:-1]
             if name in remap:
                 name = remap[name]
-            return name
+            return name, arrays
         else:
             raise ValueError('The provided descriptor %s was not a valid type descriptor' % desc)
 

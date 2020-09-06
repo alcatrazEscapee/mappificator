@@ -19,6 +19,17 @@ def invert_mapping(d: Mapping) -> Mapping[Any, Set]:
     return f
 
 
+def invert_injective_mapping(d: Mapping) -> Mapping:
+    """ Given an injective mapping a : A -> B, returns the map a' : B -> A """
+    f = dict()
+    for k, v in d.items():
+        if v not in f:
+            f[v] = k
+        else:
+            raise ValueError('Tried to injective invert a non-injective mapping')
+    return f
+
+
 def compose_mapping(a: Mapping, b: Mapping) -> Mapping:
     """ Given a : A -> B, and b : B -> C, returns the composition (a ∘ b) : A -> C """
     c = dict()
