@@ -1,5 +1,5 @@
 
-from typing import Mapping, MutableMapping, Any, Set, Callable
+from typing import Mapping, MutableMapping, Any, Set, Callable, Tuple
 
 
 def append_mapping(a: MutableMapping, b: Mapping):
@@ -65,3 +65,15 @@ def filter_values(m: Mapping, values: Set, inverse: bool = False) -> Mapping:
 def filter_mapping(m: Mapping, predicate: Callable[[Any, Any], bool]) -> Mapping:
     """ Given m : A -> B, and predicate : A x B -> bool, returns the restriction m' : {x : ∀ x ∈ A, predicate(a, m(a)) } -> B """
     return dict((k, v) for k, v in m.items() if predicate(k, v))
+
+
+def split_set(s: Set, predicate: Callable[[Any], bool]) -> Tuple[Set, Set]:
+    """ Given a set S and predicate P, let T = { s ∈ S : P(s) }. Returns T, T' """
+    p = set()
+    not_p = set()
+    for i in s:
+        if predicate(i):
+            p.add(i)
+        else:
+            not_p.add(i)
+    return p, not_p

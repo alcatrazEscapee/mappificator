@@ -278,7 +278,7 @@ def download_official(mc_version: str, client_url: Optional[str] = None, server_
         raise
 
 
-def load_mcp_spreadsheet():
+def load_mcp_spreadsheet() -> str:
     path = CACHE_LOCATION + '1.16.2-forge-mms-spreadsheet.csv'
     if os.path.isfile(path):
         print('Loading ' + path)
@@ -293,7 +293,7 @@ def load_mcp_spreadsheet():
     return text
 
 
-def download_mcp_spreadsheet():
+def download_mcp_spreadsheet() -> str:
     url = 'https://docs.google.com/spreadsheets/d/14knNUYjYkKkGpW9VTyjtlhaCTUsPWRJ91GLOFX2d23Q/gviz/tq?tqx=out:csv&sheet=1.16.2Mappings'
     try:
         with urllib.request.urlopen(url) as request:

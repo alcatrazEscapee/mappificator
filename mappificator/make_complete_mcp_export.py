@@ -1,5 +1,6 @@
 # This is why we can't have nice things
 
+from collections import defaultdict
 from typing import Dict, Set, Any
 
 from mappificator.mapping import official_mapping, srg_mapping, mcp_mapping, spreadsheet_mapping
@@ -14,8 +15,8 @@ def main():
     # 'complete' identifies the methodology
     # '20200723' is the mcp bot export used
     # '1.16.2' is the minecraft version
-    # 'v3' is the current iteration
-    version = 'complete-20200723-1.16.2-v7'
+    # 'v8' is the current iteration
+    version = 'complete-20200723-1.16.2-v9'
 
     print('Reading mappings...')
 
@@ -103,6 +104,8 @@ def generate_param_names(srg: SourceMap, srg_indexed_params: Dict[str, Dict[Any,
         srg_class = srg_class.lower()  # lowercase the entire class name
         reserved_class_name_params.add(srg_class)
 
+    possible_conflict_srg_params = set()
+
     for notch_class, entries in srg_indexed_params.items():
 
         class_groups = []  # groups that need to be checked for conflicts at a class level
@@ -123,14 +126,22 @@ def generate_param_names(srg: SourceMap, srg_indexed_params: Dict[str, Dict[Any,
             method_groups.append(param_group)
 
         # Generate params for each method group, checking for conflicts within the group
-        class_reserved_names = set()
+        class_reserved_names = defaultdict(set)  # name -> { srg names which are assigned to it }
         for group in method_groups:
             reserved_names = set()
-            for srg_param, param_type in sorted(group, key=lambda k: k[0]):
-                if srg_param in result.params:
-                    # Already named this param. We accept this name as final, and throw an error if it leads to a conflict in this method
-                    name = result.params[srg_param]
-                elif srg_param in mcp.params:
+
+            # First iterate through reserved params (ones that have already been named previously)
+            # Then iterate through any yet-unnamed params
+            first_group, second_group = utils.split_set(group, lambda g: g[0] in result.params)
+            for srg_param, param_type in first_group:
+                name = result.params[srg_param]
+                if name in reserved_names:
+                    raise ValueError('(Method Scope) A previously assigned parameter (%s = %s) conflicts with one in the current class %s' % (srg_param, name, srg.classes[notch_class]))
+                reserved_names.add(name)
+                class_reserved_names[name].add(srg_param)
+
+            for srg_param, param_type in second_group:
+                if srg_param in mcp.params:
                     name = mcp.params[srg_param]
                 elif srg_param in ss.params:
                     name = ss.params[srg_param]
@@ -138,41 +149,53 @@ def generate_param_names(srg: SourceMap, srg_indexed_params: Dict[str, Dict[Any,
                     # Auto-generate name based on class name
                     name = generate_param_name(param_type, srg.classes, reserved_names)
 
-                while name in reserved_class_name_params:
+                if name in reserved_class_name_params:
                     name = name + 'In'  # prevent local variable conflicts
 
                 if name in reserved_names:
-                    if name in result.params:
-                        raise ValueError('A parameter conflicts with one that is already assigned!')
                     name = resolve_name_conflicts(name, reserved_names)
 
                 result.params[srg_param] = name
                 reserved_names.add(name)
-                class_reserved_names.add(name)
+                class_reserved_names[name].add(srg_param)
 
         # Next, generate params for each class level group, checking conflicts against all previously named params for this class
         for group in class_groups:
-            for srg_param, param_type in sorted(group, key=lambda k: k[0]):
-                if srg_param in result.params:
-                    name = result.params[srg_param]
-                elif srg_param in mcp.params:
+
+            first_group, second_group = utils.split_set(group, lambda g: g[0] in result.params)
+            for srg_param, param_type in first_group:
+                name = result.params[srg_param]
+                if name in class_reserved_names:
+                    reserving_srg_params = class_reserved_names[name]
+                    reserving_srg_params -= {srg_param}  # we don't care about conflicts if this param is the only one that's been assigned to this name, as they would've conflicted without being named. Thus, no conflict if we use this name
+                    if reserving_srg_params:
+                        # There is still a conflict with one or more srg params (which have been named) in this class
+                        # print('(Class Scope) A previously assigned parameter (%s = %s) may conflict with one in the current class %s' % (srg_param, name, srg.classes[notch_class]))
+                        possible_conflict_srg_params.add(srg_param)
+                class_reserved_names[name].add(srg_param)
+
+            for srg_param, param_type in second_group:
+                if srg_param in mcp.params:
                     name = mcp.params[srg_param]
                 elif srg_param in ss.params:
                     name = ss.params[srg_param]
                 else:
                     # Auto-generate name based on class name
-                    name = generate_param_name(param_type, srg.classes, class_reserved_names)
+                    name = generate_param_name(param_type, srg.classes, set(class_reserved_names.keys()))
 
-                while name in reserved_class_name_params:
+                if name in reserved_class_name_params:
                     name = name + 'In'  # prevent local variable conflicts
 
                 if name in class_reserved_names:
-                    if name in result.params:
-                        raise ValueError('A parameter conflicts with one that is already assigned!')
-                    name = resolve_name_conflicts(name, class_reserved_names)
+                    name = resolve_name_conflicts(name, set(class_reserved_names.keys()))
 
                 result.params[srg_param] = name
-                class_reserved_names.add(name)
+                class_reserved_names[name].add(srg_param)
+
+    # Fix any possible conflicts due to scope problems, by not naming the parameters in question
+    for srg_param in possible_conflict_srg_params:
+        if srg_param in result.params:
+            del result.params[srg_param]
 
 
 def generate_param_name(param_type: str, srg_classes: Dict, reserved_names: Set) -> str:
@@ -200,10 +223,17 @@ def generate_param_name(param_type: str, srg_classes: Dict, reserved_names: Set)
 
 def resolve_name_conflicts(name: str, reserved_names: Set) -> str:
     if name in reserved_names:
-        proto_name = name
+        if name.endswith('_'):
+            name = name[:-1]
+            auto = True
+        else:
+            auto = False
+        proto_name = name.rstrip('0123456789')  # strip any previous numeric value off the end
         count = 1
         while name in reserved_names:
             name = proto_name + str(count)
+            if auto:
+                name += '_'
             count += 1
     return name
 
