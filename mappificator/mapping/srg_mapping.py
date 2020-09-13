@@ -2,11 +2,11 @@ from typing import Dict, Tuple, Set, Any
 
 from mappificator.util import mapping_downloader, utils
 from mappificator.util.parser import Parser
-from mappificator.util.source_map import SourceMap
+from mappificator.util.sources import SourceMap
 
 
 def read(mc_version: str) -> Tuple[SourceMap, Dict[str, Dict[Any, Set]]]:
-    joined, static_methods, constructors = mapping_downloader.download_mcp_srg(mc_version)
+    joined, static_methods, constructors = mapping_downloader.load_mcpconfig(mc_version)
 
     classes, methods, fields = parse_mcpconfig_joined_tsrg(joined)
     static_methods = parse_mcpconfig_static_methods(static_methods)

@@ -4,11 +4,11 @@ import csv
 from typing import Tuple, Dict
 
 from mappificator.util import mapping_downloader
-from mappificator.util.source_map import SourceMap
+from mappificator.util.sources import SourceMap
 
 
-def read() -> Tuple[SourceMap, Dict[str, str], Dict[str, str]]:
-    names = mapping_downloader.load_mcp_spreadsheet()
+def read(mc_version: str) -> Tuple[SourceMap, Dict[str, str], Dict[str, str]]:
+    names = mapping_downloader.load_mcp_spreadsheet(mc_version)
     fields = {}
     field_comments = {}
     methods = {}

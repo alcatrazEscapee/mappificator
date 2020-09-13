@@ -24,7 +24,7 @@ FORGE_MCP_SPREADSHEET_URL = 'https://docs.google.com/spreadsheets/d/14knNUYjYkKk
 
 DEFAULT_MCP_MAVENS = [GIGAHERTZ_MCP_MAVEN_URL, FORGE_MCP_MAVEN_URL, MCP_BOT_MCP_MAVEN_URL]
 
-CACHE_ROOT = '../build'
+CACHE_ROOT = '../build/'
 FABRIC_YARN_V2_CACHE = CACHE_ROOT + 'yarn_v2-%s+build.%s.tiny'
 FABRIC_INTERMEDIARY_CACHE = CACHE_ROOT + 'yarn_intermediary-%s.tiny'
 MCP_CACHE = CACHE_ROOT + 'mcp_snapshot-%s-%s'
@@ -34,6 +34,10 @@ OFFICIAL_VERSION_MANIFEST_CACHE = CACHE_ROOT + 'official-manifest-%s.json'
 OFFICIAL_MAPPING_CACHE = CACHE_ROOT + 'official-%s'
 FORGE_SPREADSHEET_CACHE = CACHE_ROOT + 'forge-mms-spreadsheet-%s.csv'
 CORRECTIONS_CACHE = CACHE_ROOT + 'corrections-%s.json'
+
+# Verify that the cache location exists
+if not os.path.isdir(CACHE_ROOT):
+    os.makedirs(CACHE_ROOT)
 
 
 def load_yarn_v2(mc_version: str, yarn_version: Optional[str] = None) -> str:
@@ -102,9 +106,9 @@ def load_mcp_mappings(mc_version: str, mcp_date: Optional[str] = None, mcp_versi
     if mcp_version is None:
         mcp_version = mcp_date
     if cache_location is None:
-        cache_location = 'mcp_snapshot-%s-%s' % (mcp_version, mc_version)
+        cache_location = MCP_CACHE % (mcp_version, mc_version)
     if urls is None:
-        urls = DEFAULT_MCP_MAVENS
+        urls = [u % (mcp_version, mc_version, mcp_version, mc_version) for u in DEFAULT_MCP_MAVENS]
 
     # Check cache first
     if os.path.isdir(cache_location):
@@ -279,16 +283,7 @@ def load_mcp_spreadsheet(mc_version: str) -> str:
     return text
 
 
-def try_download(url: str) -> Optional[Any]:
-    try:
-        with urllib.request.urlopen(url) as request:
-            result = request.read()
-            return result, None
-    except urllib.error.HTTPError as e:
-        return None, e
-
-
-def read_manual_corrections(mc_version: str) -> Dict[str, str]:
+def load_manual_corrections(mc_version: str) -> Dict[str, str]:
     path = CORRECTIONS_CACHE % mc_version
     if os.path.isfile(path):
         with open(path) as f:
@@ -299,6 +294,15 @@ def read_manual_corrections(mc_version: str) -> Dict[str, str]:
         f.write('{\n}')
 
     return {}
+
+
+def try_download(url: str) -> Optional[Any]:
+    try:
+        with urllib.request.urlopen(url) as request:
+            result = request.read()
+            return result, None
+    except urllib.error.HTTPError as e:
+        return None, e
 
 
 def sanitize_utf8(text) -> str:

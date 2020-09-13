@@ -2,6 +2,13 @@
 *
 !*/
 !.gitignore
+
+# Metadata
 !README.md
 !LICENSE.md
-!mappificator/**/*.py
+
+# Manually built corrections files. These are the ONLY files that should be included from /build/
+!/build/corrections-*.json
+
+# Source code
+!/mappificator/**/*.py

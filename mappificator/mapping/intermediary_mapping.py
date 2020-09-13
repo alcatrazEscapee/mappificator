@@ -2,7 +2,7 @@ import csv
 from typing import Tuple, Dict
 
 from mappificator.util import mapping_downloader
-from mappificator.util.source_map import SourceMap
+from mappificator.util.sources import SourceMap
 
 
 def read(mc_version: str):
