@@ -1,7 +1,5 @@
-# Simple one-time downloader for various minecraft mappings
-# Supports Official, MCPConfig tsrg, MCP, tterrag's yarn2mcp, Fabric Intermediary, and Yarn
-# Invoking the "load" methods will first look for a cached version of the file in `./build`, if not found, will invoke "download"
-# Invoking the "download" methods will always download a new file, and save it in `./build`
+# Simple one-time downloader for various minecraft mappings sources and files
+# Caches all downloaded files locally
 
 import datetime
 import io
@@ -10,48 +8,50 @@ import os
 import urllib.error
 import urllib.request
 import zipfile
-from typing import Tuple, Optional, Any
 
-CACHE_LOCATION = '../build/'
-OFFICIAL_MAPPINGS = {
-    '1.16.2': {
-        'client': 'https://launcher.mojang.com/v1/objects/16d12d67cd5341bfc848340f61f3ff6b957537fe/client.txt',
-        'server': 'https://launcher.mojang.com/v1/objects/40337a76c8486473e5990f7bb44b13bc08b69e7a/server.txt'
-    }
-}
+from typing import Tuple, Optional, Any, Dict, List
 
+FABRIC_YARN_V2_META_URL = 'https://meta.fabricmc.net/v2/versions/yarn'
+FABRIC_YARN_V2_URL = 'https://maven.fabricmc.net/net/fabricmc/yarn/%s+build.%s/yarn-%s+build.%s-v2.jar'
+FABRIC_INTERMEDIARY_URL = 'https://raw.githubusercontent.com/FabricMC/intermediary/master/mappings//%s.tiny'
+MCP_BOT_MCP_MAVEN_URL = 'http://export.mcpbot.bspk.rs/mcp_snapshot/%s-%s/mcp_snapshot-%s-%s.zip'
+FORGE_MCP_MAVEN_URL = 'https://files.minecraftforge.net/maven/de/oceanlabs/mcp/mcp_snapshot/%s-%s/mcp_snapshot-%s-%s.zip'
+GIGAHERTZ_MCP_MAVEN_URL = 'https://www.dogforce-games.com/maven/de/oceanlabs/mcp/mcp_snapshot/%s-%s/mcp_snapshot-%s-%s.zip'
+TTERRAG_MCP_MAVEN_URL = 'https://maven.tterrag.com/de/oceanlabs/mcp/mcp_snapshot/%s-%s-%s/mcp_snapshot-%s-%s-%s.zip'
+FORGE_MCP_CONFIG_URL = 'https://files.minecraftforge.net/maven/de/oceanlabs/mcp/mcp_config/%s/mcp_config-%s.zip'
+OFFICIAL_MANIFEST_URL = 'https://launchermeta.mojang.com/mc/game/version_manifest.json'
+FORGE_MCP_SPREADSHEET_URL = 'https://docs.google.com/spreadsheets/d/14knNUYjYkKkGpW9VTyjtlhaCTUsPWRJ91GLOFX2d23Q/gviz/tq?tqx=out:csv&sheet=%sMappings'
 
-def set_cache_location(new_cache_location: str):
-    global CACHE_LOCATION
-    CACHE_LOCATION = new_cache_location
+DEFAULT_MCP_MAVENS = [GIGAHERTZ_MCP_MAVEN_URL, FORGE_MCP_MAVEN_URL, MCP_BOT_MCP_MAVEN_URL]
+
+CACHE_ROOT = '../build'
+FABRIC_YARN_V2_CACHE = CACHE_ROOT + 'yarn_v2-%s+build.%s.tiny'
+FABRIC_INTERMEDIARY_CACHE = CACHE_ROOT + 'yarn_intermediary-%s.tiny'
+MCP_CACHE = CACHE_ROOT + 'mcp_snapshot-%s-%s'
+MCP_CONFIG_CACHE = CACHE_ROOT + 'mcpconfig-%s'
+OFFICIAL_MANIFEST_CACHE = CACHE_ROOT + 'official-manifest.json'
+OFFICIAL_VERSION_MANIFEST_CACHE = CACHE_ROOT + 'official-manifest-%s.json'
+OFFICIAL_MAPPING_CACHE = CACHE_ROOT + 'official-%s'
+FORGE_SPREADSHEET_CACHE = CACHE_ROOT + 'forge-mms-spreadsheet-%s.csv'
+CORRECTIONS_CACHE = CACHE_ROOT + 'corrections-%s.json'
 
 
 def load_yarn_v2(mc_version: str, yarn_version: Optional[str] = None) -> str:
     if yarn_version is None:
-        # find the newest build if it exists
-        yarn_mappings = sorted([f for f in os.listdir(CACHE_LOCATION) if os.path.isfile(CACHE_LOCATION + f) and f.startswith('yarn_v2-%s' % mc_version)])
+        # find the newest build
+        yarn_mappings = sorted([f for f in os.listdir(CACHE_ROOT) if os.path.isfile(CACHE_ROOT + f) and f.startswith('yarn_v2-%s' % mc_version)])
         if yarn_mappings:
-            print('Loading %s%s' % (CACHE_LOCATION, yarn_mappings[-1]))
-            with open(CACHE_LOCATION + yarn_mappings[-1]) as f:
+            with open(CACHE_ROOT + yarn_mappings[-1]) as f:
                 return f.read()
     else:
-        path = CACHE_LOCATION + 'yarn_v2-%s+build.%s.tiny' % (mc_version, yarn_version)
         # find exact match
+        path = FABRIC_YARN_V2_CACHE % (mc_version, yarn_version)
         if os.path.isfile(path):
-            print('Loading %s' % path)
             with open(path) as f:
                 return f.read()
 
-    yarn, path = download_yarn_v2(mc_version, yarn_version)
-    with open(CACHE_LOCATION + path, 'w', encoding='utf-8') as f:
-        f.write(yarn)
-    return yarn
-
-
-def download_yarn_v2(mc_version: str, yarn_version: Optional[str] = None) -> Tuple[str, str]:
     # fetch yarn metadata in order to determine available build numbers
-    meta_url = 'https://meta.fabricmc.net/v2/versions/yarn'
-    with urllib.request.urlopen(meta_url) as request:
+    with urllib.request.urlopen(FABRIC_YARN_V2_META_URL) as request:
         versions = json.loads(request.read().decode('utf-8'))
 
     # filter versions based on passed in mc and yarn version numbers
@@ -63,126 +63,68 @@ def download_yarn_v2(mc_version: str, yarn_version: Optional[str] = None) -> Tup
         yarn_version = versions[0]['build']
 
     # download specified yarn build
-    path = 'yarn_v2-%s+build.%s.tiny' % (mc_version, yarn_version)
-    print('Downloading %s' % path)
-    url = 'https://maven.fabricmc.net/net/fabricmc/yarn/%s+build.%s/yarn-%s+build.%s-v2.jar' % (mc_version, yarn_version, mc_version, yarn_version)
+    url = FABRIC_YARN_V2_URL % (mc_version, yarn_version, mc_version, yarn_version)
     with urllib.request.urlopen(url) as request:
         tiny_jar = request.read()
     with io.BytesIO(tiny_jar) as fio:
         with zipfile.ZipFile(fio, 'r') as tiny_zip:
             with tiny_zip.open('mappings/mappings.tiny') as f:
                 mappings = sanitize_utf8(f.read())
-    return mappings, path
+
+    # save to local cache
+    path = FABRIC_YARN_V2_CACHE % (mc_version, yarn_version)
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write(mappings)
+
+    return mappings
 
 
 def load_yarn_intermediary(mc_version: str) -> str:
-    path = CACHE_LOCATION + 'yarn_intermediary-%s.tiny' % mc_version
+    path = FABRIC_INTERMEDIARY_CACHE % mc_version
     if os.path.isfile(path):
-        print('Loading %s' % path)
         with open(path) as f:
             return f.read()
 
-    intermediary = download_yarn_intermediary(mc_version)
+    url = FABRIC_INTERMEDIARY_URL % mc_version
+    with urllib.request.urlopen(url) as request:
+        intermediary = sanitize_utf8(request.read())
+
+    # save to local cache
     with open(path, 'w') as f:
         f.write(intermediary)
     return intermediary
 
 
-def download_yarn_intermediary(mc_version: str) -> str:
-    print('Downloading yarn_intermediary-%s.tiny' % mc_version)
-    url = 'https://raw.githubusercontent.com/FabricMC/intermediary/master/mappings//%s.tiny' % mc_version
-    with urllib.request.urlopen(url) as request:
-        return sanitize_utf8(request.read())
-
-
-def load_mcp_mappings(mc_version: str, mcp_date: Optional[str] = None) -> Tuple[str, str, str]:
+def load_mcp_mappings(mc_version: str, mcp_date: Optional[str] = None, mcp_version: Optional[str] = None, urls: Optional[List[str]] = None, cache_location: Optional[str] = None) -> Tuple[str, str, str]:
+    # Determine default arguments and versions
     if mcp_date is None:
         mcp_date = str(datetime.date.today()).replace('-', '')
-    root_path = CACHE_LOCATION + 'mcp_snapshot-%s-%s' % (mcp_date, mc_version)
-    if os.path.isdir(root_path):
-        print('Loading %s' % root_path)
-        with open(root_path + '/methods.csv') as f:
+    if mcp_version is None:
+        mcp_version = mcp_date
+    if cache_location is None:
+        cache_location = 'mcp_snapshot-%s-%s' % (mcp_version, mc_version)
+    if urls is None:
+        urls = DEFAULT_MCP_MAVENS
+
+    # Check cache first
+    if os.path.isdir(cache_location):
+        with open(cache_location + '/methods.csv') as f:
             methods = f.read()
-        with open(root_path + '/fields.csv') as f:
+        with open(cache_location + '/fields.csv') as f:
             fields = f.read()
-        with open(root_path + '/params.csv') as f:
+        with open(cache_location + '/params.csv') as f:
             params = f.read()
         return methods, fields, params
 
-    methods, fields, params, _ = download_mcp_mappings(mc_version, mcp_date)
-    if not os.path.isdir(root_path):
-        os.mkdir(root_path)
-    with open(root_path + '/methods.csv', 'w') as f:
-        f.write(methods)
-    with open(root_path + '/fields.csv', 'w') as f:
-        f.write(fields)
-    with open(root_path + '/params.csv', 'w') as f:
-        f.write(params)
-    return methods, fields, params
-
-
-def download_mcp_mappings(mc_version: str, mcp_date: Optional[str] = None) -> Tuple[str, str, str, str]:
-    if mcp_date is None:
-        mcp_date = str(datetime.date.today()).replace('-', '')
-    path = 'mcp_snapshot-%s-%s' % (mcp_date, mc_version)
-
-    # Since the state of MCP is in limbo, use multiple sources
-    urls = [
-        'http://export.mcpbot.bspk.rs/mcp_snapshot/%s-%s/mcp_snapshot-%s-%s.zip' % (mcp_date, mc_version, mcp_date, mc_version),
-        'https://www.dogforce-games.com/maven/de/oceanlabs/mcp/mcp_snapshot/%s-%s/mcp_snapshot-%s-%s.zip' % (mcp_date, mc_version, mcp_date, mc_version)
-    ]
+    # Sequentially try all provided urls for the given version
     export = error = None
     while export is None and urls:
         url = urls.pop(0)
-        print('Downloading %s, from %s' % (path, (url[:30] + '...' if len(url) > 30 else url)))
         export, error = try_download(url)
     if export is None:
         raise error
 
-    with io.BytesIO(export) as fio:
-        with zipfile.ZipFile(fio, 'r') as export_zip:
-            with export_zip.open('methods.csv') as f:
-                methods = sanitize_utf8(f.read())
-            with export_zip.open('fields.csv') as f:
-                fields = sanitize_utf8(f.read())
-            with export_zip.open('params.csv') as f:
-                params = sanitize_utf8(f.read())
-    return methods, fields, params, path
-
-
-def load_yarn2mcp_mappings(mc_version: str, mcp_date: str, mix_type: str = 'mixed') -> Tuple[str, str, str]:
-    root_path = CACHE_LOCATION + 'yarn2mcp_snapshot-%s-%s-%s' % (mcp_date, mc_version, mix_type)
-    if os.path.isdir(root_path):
-        print('Loading %s' % root_path)
-        with open(root_path + '/methods.csv') as f:
-            methods = f.read()
-        with open(root_path + '/fields.csv') as f:
-            fields = f.read()
-        try:
-            with open(root_path + '/params.csv') as f:
-                params = f.read()
-        except FileNotFoundError:
-            params = ''
-        return methods, fields, params
-
-    methods, fields, params, _ = download_yarn2mcp_mappings(mc_version, mcp_date, mix_type)
-    if not os.path.isdir(root_path):
-        os.mkdir(root_path)
-    with open(root_path + '/methods.csv', 'w') as f:
-        f.write(methods)
-    with open(root_path + '/fields.csv', 'w') as f:
-        f.write(fields)
-    with open(root_path + '/params.csv', 'w') as f:
-        f.write(params)
-    return methods, fields, params
-
-
-def download_yarn2mcp_mappings(mc_version: str, mcp_date: str, mix_type: str) -> Tuple[str, str, str, str]:
-    url = 'https://maven.tterrag.com/de/oceanlabs/mcp/mcp_snapshot/%s-%s-%s/mcp_snapshot-%s-%s-%s.zip' % (mcp_date, mix_type, mc_version, mcp_date, mix_type, mc_version)
-    path = 'yarn2mcp-%s-%s-%s' % (mcp_date, mix_type, mc_version)
-    print('Downloading %s' % path)
-    with urllib.request.urlopen(url) as request:
-        export = request.read()
+    # Read the successful export
     with io.BytesIO(export) as fio:
         with zipfile.ZipFile(fio, 'r') as export_zip:
             with export_zip.open('methods.csv') as f:
@@ -193,15 +135,25 @@ def download_yarn2mcp_mappings(mc_version: str, mcp_date: str, mix_type: str) ->
                 with export_zip.open('params.csv') as f:
                     params = sanitize_utf8(f.read())
             except KeyError:
-                print('params.csv not found')
-                params = ''
-    return methods, fields, params, path
+                params = ''  # Some mappings (yarn2mcp) do not include params
+
+    # Save all files to the local cache
+    if not os.path.isdir(cache_location):
+        os.mkdir(cache_location)
+    with open(cache_location + '/methods.csv', 'w') as f:
+        f.write(methods)
+    with open(cache_location + '/fields.csv', 'w') as f:
+        f.write(fields)
+    with open(cache_location + '/params.csv', 'w') as f:
+        f.write(params)
+    return methods, fields, params
 
 
-def load_mcp_srg(mc_version: str) -> Tuple[str, str, str]:
-    path = CACHE_LOCATION + 'mcpconfig-%s' % mc_version
+def load_mcpconfig(mc_version: str) -> Tuple[str, str, str]:
+    path = MCP_CONFIG_CACHE % mc_version
+
+    # Check local cache first
     if os.path.isdir(path):
-        print('Loading %s' % path)
         with open(path + '/joined.tsrg') as f:
             joined = f.read()
         with open(path + '/static_methods.txt') as f:
@@ -210,7 +162,20 @@ def load_mcp_srg(mc_version: str) -> Tuple[str, str, str]:
             constructors = f.read()
         return joined, static_methods, constructors
 
-    joined, static_methods, constructors = download_mcp_srg(mc_version)
+    # Cache miss, download from forge maven
+    url = FORGE_MCP_CONFIG_URL % (mc_version, mc_version)
+    with urllib.request.urlopen(url) as request:
+        mcp_config = request.read()
+    with io.BytesIO(mcp_config) as fio:
+        with zipfile.ZipFile(fio, 'r') as mcp_config_zip:
+            with mcp_config_zip.open('config/joined.tsrg') as f:
+                joined = sanitize_utf8(f.read())
+            with mcp_config_zip.open('config/static_methods.txt') as f:
+                static_methods = sanitize_utf8(f.read())
+            with mcp_config_zip.open('config/constructors.txt') as f:
+                constructors = sanitize_utf8(f.read())
+
+    # Save to local cache
     if not os.path.isdir(path):
         os.mkdir(path)
     with open(path + '/joined.tsrg', 'w') as f:
@@ -222,85 +187,96 @@ def load_mcp_srg(mc_version: str) -> Tuple[str, str, str]:
     return joined, static_methods, constructors
 
 
-def download_mcp_srg(mc_version: str) -> Tuple[str, str, str]:
-    url = 'https://files.minecraftforge.net/maven/de/oceanlabs/mcp/mcp_config/%s/mcp_config-%s.zip' % (mc_version, mc_version)
-    try:
-        with urllib.request.urlopen(url) as request:
-            mcp_config = request.read()
-        with io.BytesIO(mcp_config) as fio:
-            with zipfile.ZipFile(fio, 'r') as mcp_config_zip:
-                with mcp_config_zip.open('config/joined.tsrg') as f:
-                    joined = sanitize_utf8(f.read())
-                with mcp_config_zip.open('config/static_methods.txt') as f:
-                    static_methods = sanitize_utf8(f.read())
-                with mcp_config_zip.open('config/constructors.txt') as f:
-                    constructors = sanitize_utf8(f.read())
-        return joined, static_methods, constructors
-    except:
-        print('Unable to download mcp_srg from %s' % repr(url))
-        raise
-
-
 def load_official(mc_version: str) -> Tuple[str, str]:
-    path = CACHE_LOCATION + 'official-%s' % mc_version
-    if os.path.isdir(path):
-        print('Loading %s' % path)
-        with open(path + '/client.txt') as f:
+    # Need to inspect the manifest
+    def load_manifest() -> Dict:
+        if os.path.isfile(OFFICIAL_MANIFEST_CACHE):
+            # Load manifest from cache
+            with open(OFFICIAL_MANIFEST_CACHE) as f_:
+                manifest = f_.read()
+        else:
+            # Download and save manifest
+            with urllib.request.urlopen(OFFICIAL_MANIFEST_URL) as request_:
+                manifest = sanitize_utf8(request_.read())
+            with open(OFFICIAL_MANIFEST_CACHE, 'w') as f_:
+                f_.write(manifest)
+        return json.loads(manifest)
+
+    manifest_json = None
+    if mc_version is None:
+        manifest_json = load_manifest()
+        mc_version = manifest_json['latest']['release']
+
+    # Check the official mapping cache
+    mapping_path = OFFICIAL_MAPPING_CACHE % mc_version
+    if os.path.isdir(mapping_path):
+        # Official cache found
+        with open(mapping_path + '/client.txt') as f:
             client = sanitize_utf8(f.read())
-        with open(path + '/server.txt') as f:
+        with open(mapping_path + '/server.txt') as f:
             server = sanitize_utf8(f.read())
         return client, server
 
-    client, server = download_official(mc_version)
-    if not os.path.isdir(path):
-        os.mkdir(path)
-    with open(path + '/client.txt', 'w') as f:
+    # Need to download the official mappings. Check if the version manifest is present
+    version_meta_path = OFFICIAL_VERSION_MANIFEST_CACHE % mc_version
+    if os.path.isfile(version_meta_path):
+        # Load the version manifest, in order to get the mapping urls
+        with open(version_meta_path) as f:
+            version_meta_json = json.loads(f.read())
+    else:
+        # No version manifest, so load the full manifest
+        if manifest_json is None:
+            manifest_json = load_manifest()
+
+        # Find the version manifest matching the mc version
+        for game_version_json in manifest_json['versions']:
+            if game_version_json['id'] == mc_version:
+                version_manifest_url = game_version_json['url']
+                break
+        else:
+            raise ValueError('No manifest entry for game version %s' % mc_version)
+
+        # Download and save manifest
+        with urllib.request.urlopen(version_manifest_url) as request:
+            version_manifest = sanitize_utf8(request.read())
+        with open(version_meta_path, 'w') as f:
+            f.write(version_manifest)
+
+        version_meta_json = json.loads(version_manifest)
+
+    # Identify urls for mappings
+    client_url = version_meta_json['downloads']['client_mappings']['url']
+    server_url = version_meta_json['downloads']['server_mappings']['url']
+
+    # Load official mappings
+    with urllib.request.urlopen(client_url) as request:
+        client = sanitize_utf8(request.read())
+    with urllib.request.urlopen(server_url) as request:
+        server = sanitize_utf8(request.read())
+
+    # And save to cache
+    if not os.path.isdir(mapping_path):
+        os.mkdir(mapping_path)
+    with open(mapping_path + '/client.txt', 'w') as f:
         f.write(client)
-    with open(path + '/server.txt', 'w') as f:
+    with open(mapping_path + '/server.txt', 'w') as f:
         f.write(server)
     return client, server
 
 
-def download_official(mc_version: str, client_url: Optional[str] = None, server_url: Optional[str] = None) -> Tuple[str, str]:
-    if (client_url is None or server_url is None) and mc_version not in OFFICIAL_MAPPINGS:
-        print('Cannot download official mappings for %s' % mc_version)
-    try:
-        url = client_url if client_url is not None else OFFICIAL_MAPPINGS[mc_version]['client']
-        with urllib.request.urlopen(url) as request:
-            client = sanitize_utf8(request.read())
-
-        url = server_url if server_url is not None else OFFICIAL_MAPPINGS[mc_version]['server']
-        with urllib.request.urlopen(url) as request:
-            server = sanitize_utf8(request.read())
-        return client, server
-    except:
-        print('Unable to download official from %s' % repr(OFFICIAL_MAPPINGS[mc_version]))
-        raise
-
-
-def load_mcp_spreadsheet() -> str:
-    path = CACHE_LOCATION + '1.16.2-forge-mms-spreadsheet.csv'
+def load_mcp_spreadsheet(mc_version: str) -> str:
+    path = FORGE_SPREADSHEET_CACHE % mc_version
     if os.path.isfile(path):
-        print('Loading ' + path)
         with open(path) as f:
             return f.read()
 
-    print('Downloading ' + path)
-    text = download_mcp_spreadsheet()
+    url = FORGE_MCP_SPREADSHEET_URL % mc_version
+    with urllib.request.urlopen(url) as request:
+        text = sanitize_utf8(request.read())
     with open(path, 'w') as f:
         f.write(text)
 
     return text
-
-
-def download_mcp_spreadsheet() -> str:
-    url = 'https://docs.google.com/spreadsheets/d/14knNUYjYkKkGpW9VTyjtlhaCTUsPWRJ91GLOFX2d23Q/gviz/tq?tqx=out:csv&sheet=1.16.2Mappings'
-    try:
-        with urllib.request.urlopen(url) as request:
-            return sanitize_utf8(request.read())
-    except:
-        print('Unable to download mcp spreadsheet as csv')
-        raise
 
 
 def try_download(url: str) -> Optional[Any]:
@@ -310,6 +286,19 @@ def try_download(url: str) -> Optional[Any]:
             return result, None
     except urllib.error.HTTPError as e:
         return None, e
+
+
+def read_manual_corrections(mc_version: str) -> Dict[str, str]:
+    path = CORRECTIONS_CACHE % mc_version
+    if os.path.isfile(path):
+        with open(path) as f:
+            text = sanitize_utf8(f.read())
+            return json.loads(text)
+
+    with open(path, 'w') as f:
+        f.write('{\n}')
+
+    return {}
 
 
 def sanitize_utf8(text) -> str:
