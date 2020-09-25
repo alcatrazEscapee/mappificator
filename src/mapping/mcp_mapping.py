@@ -18,7 +18,7 @@ def read(mc_version: str, mcp_date: Optional[str] = None) -> Tuple[SourceMap, Di
     return SourceMap(fields, methods, params), method_comments, fields_comments
 
 
-def write(version: str, path: str, source_map: SourceMap, field_comments: Optional[Mapping] = None, method_comments: Optional[Mapping] = None):
+def write(version: str, source_map: SourceMap, field_comments: Optional[Mapping] = None, method_comments: Optional[Mapping] = None):
     fields_comments = field_comments if field_comments is not None else dict()
     method_comments = method_comments if method_comments is not None else dict()
 
@@ -26,15 +26,15 @@ def write(version: str, path: str, source_map: SourceMap, field_comments: Option
     methods_txt = write_csv_fields_or_methods(source_map.methods, method_comments).dump()
     params_txt = write_csv_params(source_map.params).dump()
 
-    file_path = os.path.join(path, 'mcp_snapshot-%s.zip' % version)
+    file_path = os.path.join(mapping_downloader.get_cache_root(), 'mcp_snapshot-%s.zip' % version)
     with zipfile.ZipFile(file_path, 'w') as f:
         f.writestr('params.csv', params_txt)
         f.writestr('fields.csv', fields_txt)
         f.writestr('methods.csv', methods_txt)
 
 
-def publish(version: str, path: str):
-    file_path = os.path.join(path, 'mcp_snapshot-%s.zip' % version)
+def publish(version: str):
+    file_path = os.path.join(mapping_downloader.get_cache_root(), 'mcp_snapshot-%s.zip' % version)
     if not os.path.isfile(file_path):
         raise ValueError('Must first build export before publishing to maven local')
 

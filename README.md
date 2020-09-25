@@ -4,7 +4,7 @@ This is a pile of bodging scripts for playing around with Minecraft modding mapp
 
 #### The "Complete" MCP Mapping Export
 
-The primary use for this at the moment is to generate a 100% mapped mcp snapshot export, for use in Forge 1.16.2 development. All required materials to make this are downloaded locally, and the mapping is built and uploaded to the user's maven local. For legal reasons these mappings cannot be redistributed as is and have to be built in situ.
+The primary use for this at the moment is to generate a 100% mapped mcp snapshot export, for use in Forge 1.16.3 development. All required materials to make this are downloaded locally, and the mapping is built and uploaded to the user's maven local. For legal reasons these mappings cannot be redistributed as is and have to be built in situ.
 
 This involves:
 - Using official field and method names. These are 100% complete and have the advantage of a guarantee of no field / method shadowing conflicts.
@@ -15,9 +15,12 @@ This involves:
 In order to get this export:
 
 - You must install [Maven](https://maven.apache.org/). (Python will invoke `mvn` via command line so it must be on your path.)
-- Run `mappificator/make_complete_mcp_export.py`
+  - To check if Maven is functional, run `mvn --version` in a console window.
+- Run `mappificator.py` with the working directory `/<Mappificator Project Folder>/src/`
+  - To change the output mcp snapshot version, use the `--version` flag.
+  - In order to run a CLI which is useful for reverse engineering names, run `mappificator.py --cli`
 
-In order to use this (or any other custom mcp export) in a mod dev environment:
+In order to use this (or any other custom mcp export) in a mod dev environment, you need to edit your `build.gradle`:
 
 Add `mavenLocal()` to your repositories:
 
@@ -27,7 +30,7 @@ repositories {
 }
 ```
 
-And change your mapping version and channel to the one produced by this export. (Hint: the version can be found and modified in the first line of `make_complete_mcp_export.py`)
+And change your mapping version and channel to the one produced by this export. (Hint: the version can be found and modified in the first line of `mappificator.py`)
 
 ```
 minecraft {

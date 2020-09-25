@@ -25,19 +25,31 @@ FORGE_MCP_SPREADSHEET_URL = 'https://docs.google.com/spreadsheets/d/14knNUYjYkKk
 DEFAULT_MCP_MAVENS = [GIGAHERTZ_MCP_MAVEN_URL, FORGE_MCP_MAVEN_URL, MCP_BOT_MCP_MAVEN_URL]
 
 CACHE_ROOT = '../build/'
-FABRIC_YARN_V2_CACHE = CACHE_ROOT + 'yarn_v2-%s+build.%s.tiny'
-FABRIC_INTERMEDIARY_CACHE = CACHE_ROOT + 'yarn_intermediary-%s.tiny'
-MCP_CACHE = CACHE_ROOT + 'mcp_snapshot-%s-%s'
-MCP_CONFIG_CACHE = CACHE_ROOT + 'mcpconfig-%s'
-OFFICIAL_MANIFEST_CACHE = CACHE_ROOT + 'official-manifest.json'
-OFFICIAL_VERSION_MANIFEST_CACHE = CACHE_ROOT + 'official-manifest-%s.json'
-OFFICIAL_MAPPING_CACHE = CACHE_ROOT + 'official-%s'
-FORGE_SPREADSHEET_CACHE = CACHE_ROOT + 'forge-mms-spreadsheet-%s.csv'
-CORRECTIONS_CACHE = CACHE_ROOT + 'corrections-%s.json'
+FABRIC_YARN_V2_CACHE = 'yarn_v2-%s+build.%s.tiny'
+FABRIC_INTERMEDIARY_CACHE = 'yarn_intermediary-%s.tiny'
+MCP_CACHE = 'mcp_snapshot-%s-%s'
+MCP_CONFIG_CACHE = 'mcpconfig-%s'
+OFFICIAL_MANIFEST_CACHE = 'official-manifest.json'
+OFFICIAL_VERSION_MANIFEST_CACHE = 'official-manifest-%s.json'
+OFFICIAL_MAPPING_CACHE = 'official-%s'
+FORGE_SPREADSHEET_CACHE = 'forge-mms-spreadsheet-%s.csv'
+CORRECTIONS_CACHE = 'corrections-%s.json'
 
-# Verify that the cache location exists
-if not os.path.isdir(CACHE_ROOT):
-    os.makedirs(CACHE_ROOT)
+
+def get_cache_root() -> str:
+    global CACHE_ROOT
+    return CACHE_ROOT
+
+
+def set_cache_root(cache: str):
+    global CACHE_ROOT
+    CACHE_ROOT = cache
+    # Verify that the cache location exists
+    if not os.path.isdir(CACHE_ROOT):
+        os.makedirs(CACHE_ROOT)
+
+
+set_cache_root(CACHE_ROOT)
 
 
 def load_yarn_v2(mc_version: str, yarn_version: Optional[str] = None) -> str:
@@ -49,7 +61,7 @@ def load_yarn_v2(mc_version: str, yarn_version: Optional[str] = None) -> str:
                 return f.read()
     else:
         # find exact match
-        path = FABRIC_YARN_V2_CACHE % (mc_version, yarn_version)
+        path = CACHE_ROOT + FABRIC_YARN_V2_CACHE % (mc_version, yarn_version)
         if os.path.isfile(path):
             with open(path) as f:
                 return f.read()
@@ -76,7 +88,7 @@ def load_yarn_v2(mc_version: str, yarn_version: Optional[str] = None) -> str:
                 mappings = sanitize_utf8(f.read())
 
     # save to local cache
-    path = FABRIC_YARN_V2_CACHE % (mc_version, yarn_version)
+    path = CACHE_ROOT + FABRIC_YARN_V2_CACHE % (mc_version, yarn_version)
     with open(path, 'w', encoding='utf-8') as f:
         f.write(mappings)
 
@@ -84,7 +96,7 @@ def load_yarn_v2(mc_version: str, yarn_version: Optional[str] = None) -> str:
 
 
 def load_yarn_intermediary(mc_version: str) -> str:
-    path = FABRIC_INTERMEDIARY_CACHE % mc_version
+    path = CACHE_ROOT + FABRIC_INTERMEDIARY_CACHE % mc_version
     if os.path.isfile(path):
         with open(path) as f:
             return f.read()
@@ -106,7 +118,7 @@ def load_mcp_mappings(mc_version: str, mcp_date: Optional[str] = None, mcp_versi
     if mcp_version is None:
         mcp_version = mcp_date
     if cache_location is None:
-        cache_location = MCP_CACHE % (mcp_version, mc_version)
+        cache_location = CACHE_ROOT + MCP_CACHE % (mcp_version, mc_version)
     if urls is None:
         urls = [u % (mcp_version, mc_version, mcp_version, mc_version) for u in DEFAULT_MCP_MAVENS]
 
@@ -154,7 +166,7 @@ def load_mcp_mappings(mc_version: str, mcp_date: Optional[str] = None, mcp_versi
 
 
 def load_mcpconfig(mc_version: str) -> Tuple[str, str, str]:
-    path = MCP_CONFIG_CACHE % mc_version
+    path = CACHE_ROOT + MCP_CONFIG_CACHE % mc_version
 
     # Check local cache first
     if os.path.isdir(path):
@@ -194,15 +206,16 @@ def load_mcpconfig(mc_version: str) -> Tuple[str, str, str]:
 def load_official(mc_version: str) -> Tuple[str, str]:
     # Need to inspect the manifest
     def load_manifest() -> Dict:
-        if os.path.isfile(OFFICIAL_MANIFEST_CACHE):
+        official_manifest = CACHE_ROOT + OFFICIAL_MANIFEST_CACHE
+        if os.path.isfile(official_manifest):
             # Load manifest from cache
-            with open(OFFICIAL_MANIFEST_CACHE) as f_:
+            with open(official_manifest) as f_:
                 manifest = f_.read()
         else:
             # Download and save manifest
             with urllib.request.urlopen(OFFICIAL_MANIFEST_URL) as request_:
                 manifest = sanitize_utf8(request_.read())
-            with open(OFFICIAL_MANIFEST_CACHE, 'w') as f_:
+            with open(official_manifest, 'w') as f_:
                 f_.write(manifest)
         return json.loads(manifest)
 
@@ -212,7 +225,7 @@ def load_official(mc_version: str) -> Tuple[str, str]:
         mc_version = manifest_json['latest']['release']
 
     # Check the official mapping cache
-    mapping_path = OFFICIAL_MAPPING_CACHE % mc_version
+    mapping_path = CACHE_ROOT + OFFICIAL_MAPPING_CACHE % mc_version
     if os.path.isdir(mapping_path):
         # Official cache found
         with open(mapping_path + '/client.txt') as f:
@@ -222,7 +235,7 @@ def load_official(mc_version: str) -> Tuple[str, str]:
         return client, server
 
     # Need to download the official mappings. Check if the version manifest is present
-    version_meta_path = OFFICIAL_VERSION_MANIFEST_CACHE % mc_version
+    version_meta_path = CACHE_ROOT + OFFICIAL_VERSION_MANIFEST_CACHE % mc_version
     if os.path.isfile(version_meta_path):
         # Load the version manifest, in order to get the mapping urls
         with open(version_meta_path) as f:
@@ -269,7 +282,7 @@ def load_official(mc_version: str) -> Tuple[str, str]:
 
 
 def load_mcp_spreadsheet(mc_version: str) -> str:
-    path = FORGE_SPREADSHEET_CACHE % mc_version
+    path = CACHE_ROOT + FORGE_SPREADSHEET_CACHE % mc_version
     if os.path.isfile(path):
         with open(path) as f:
             return f.read()
@@ -284,7 +297,7 @@ def load_mcp_spreadsheet(mc_version: str) -> str:
 
 
 def load_manual_corrections(mc_version: str) -> Dict[str, str]:
-    path = CORRECTIONS_CACHE % mc_version
+    path = CACHE_ROOT + CORRECTIONS_CACHE % mc_version
     if os.path.isfile(path):
         with open(path) as f:
             text = sanitize_utf8(f.read())

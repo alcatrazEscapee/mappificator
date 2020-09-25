@@ -1,5 +1,6 @@
 # This is why we can't have nice things
 
+import argparse
 import re
 from typing import Dict, Set, Any
 
@@ -15,15 +16,55 @@ from util.sources import SourceMap, SourceSetComparison
 # 'v#' is the current iteration
 VERSION = 'complete-20200912-1.16.3-v5'
 
+CLI_HELP = """
+This is an interface similar to K9 used to reverse engineer mapped names. It will read the mapping log file and can show information about all mapped items, search, and filter based on input commands.
+A command consists of a space separated list of elements, which each either produce a set of results, or act upon the previous (current) results. At the end of the statement, the results will be displayed.
+Commands:
+> help      - print this menu
+> exit      - exits the CLI
+> nc <name> - lists [n]otch [c]lass names matching <name>
+> c <name>  - lists srg [c]lass names matching <name>
+> m <name>  - lists named [m]ethods matching <name>
+> f <name>  - lists named [f]ields matching <name>
+> p <name>  - lists named [p]arams matching <name>
+> fc <name> - [f]ilters the results (methods, fields, or params) by the [c]lass <name>
+> fm <name> - [f]ilters the results (params) by the [m]ethod <name>
+> [ <num>   - only includes a single entry, at index <num> of the previous results
+> gm        - [g]ets all [m]ethods from the first class of the previous results
+> gp        - [g]ets all [p]arameters from the first method of the previous results
+> max <num> - include up to <num> entries in the output (default 10)
+"""
+
 
 def main():
+    """ Entry point and argument parser """
+    parser = argparse.ArgumentParser(description='The Complete MCP Export')
+    parser.add_argument('--cli', action='store_true', dest='cli', help='Run the CLI for mapping reverse engineering.')
+    parser.add_argument('--version', type=str, default='complete-20200912-1.16.3-v5', help='The version of the complete mcp export')
+    parser.add_argument('--cache', type=str, default='../build/', help='The cache folder, to look for downloaded mappings and other static files')
+
+    # Individual versions
+    parser.add_argument('--mc-version', type=str, default='1.16.3', help='The Minecraft version used to download official, srg, and spreadsheet mappings')
+    parser.add_argument('--mcp-version', type=str, default='1.16.2', help='The Minecraft version used to download mcp mappings')
+    parser.add_argument('--mcp-date', type=str, default='20200912', help='The snapshot date for the mcp mappings')
+
+    args = parser.parse_args()
+
+    mapping_downloader.set_cache_root(args.cache)
+    if args.cli:
+        cli(args.version)
+    else:
+        make(args.version, args.mc_version, args.mcp_version, args.mcp_date)
+
+
+def make(version: str, mc_version: str, mcp_version: str, mcp_date: str):
     print('Reading mappings...')
 
-    mojmap, mojmap_lambdas = official_mapping.read('1.16.3')
-    srg, srg_indexed_params = srg_mapping.read('1.16.3')
-    mcp, mcp_method_comments, mcp_field_comments = mcp_mapping.read('1.16.2', '20200912')
-    ss, ss_method_comments, ss_field_comments = spreadsheet_mapping.read('1.16.3')
-    manual_mappings = mapping_downloader.load_manual_corrections('1.16.3')
+    mojmap, mojmap_lambdas = official_mapping.read(mc_version)
+    srg, srg_indexed_params = srg_mapping.read(mc_version)
+    mcp, mcp_method_comments, mcp_field_comments = mcp_mapping.read(mcp_version, mcp_date)
+    ss, ss_method_comments, ss_field_comments = spreadsheet_mapping.read(mc_version)
+    manual_mappings = mapping_downloader.load_manual_corrections(mc_version)
 
     print('Validating mappings...')
 
@@ -75,11 +116,11 @@ def main():
     print('Method Comments = %d' % len(method_comments))
 
     # Write reverse lookup log output
-    write_reverse_lookup_log(VERSION, '../build', srg, result)
+    write_reverse_lookup_log(version, srg, result)
 
     # Write mcp mappings
-    mcp_mapping.write(VERSION, 'build', result, field_comments, method_comments)
-    mcp_mapping.publish(VERSION, 'build')
+    mcp_mapping.write(version, result, field_comments, method_comments)
+    mcp_mapping.publish(version)
 
     print('Done')
 
@@ -212,8 +253,8 @@ def resolve_name_conflicts(name: str, reserved_names: Set) -> str:
     return name
 
 
-def write_reverse_lookup_log(version: str, path: str, srg: SourceMap, result: SourceMap):
-    with open(path + '/mcp_snapshot-%s.log' % version, 'w') as f:
+def write_reverse_lookup_log(version: str, srg: SourceMap, result: SourceMap):
+    with open(mapping_downloader.get_cache_root() + '/mcp_snapshot-%s.log' % version, 'w') as f:
         for notch_class, srg_class in srg.classes.items():
             f.write('C\t%s\t%s\n' % (notch_class, srg_class))
         for field, srg_field in srg.fields.items():
@@ -235,6 +276,83 @@ def write_reverse_lookup_log(version: str, path: str, srg: SourceMap, result: So
                 named_method = srg_method = notch_method
             named_param = result.params[srg_param] if srg_param in result.params else srg_param
             f.write('P\t%s\t%s\t%s\t%s\t%s\t%s\n' % (named_class, named_method, param_index, named_param, srg_method, srg_param))
+
+
+def cli(version: str):
+    print('Loading CLI...')
+
+    with open(mapping_downloader.get_cache_root() + 'mcp_snapshot-%s.log' % version) as f:
+        log = f.read()
+
+    sources = []
+    for line in log.split('\n'):
+        if line != '':
+            sources.append(tuple(line.split('\t')))
+    indexed = {'C': [], 'F': [], 'M': [], 'P': []}
+    for s in sources:
+        indexed[s[0]].append(s)
+
+    print(CLI_HELP)
+
+    cmd = input('>')
+    while cmd != 'exit':
+        try:
+            results = []
+            cmd_parts = [c.lower() for c in cmd.split(' ')]
+            if cmd_parts == ['help']:
+                print(CLI_HELP)
+                cmd = input('>')
+                continue
+            max_show = 10
+            index = 0
+            while index < len(cmd_parts):
+                cmd_part = cmd_parts[index]
+                if cmd_part == 'c':  # list classes
+                    clazz = cmd_parts[index + 1]
+                    results = [i for i in indexed['C'] if clazz in i[2].lower()]
+                elif cmd_part == 'nc':  # list notch classes
+                    clazz = cmd_parts[index + 1]
+                    results = [i for i in indexed['C'] if clazz in i[1].lower()]
+                elif cmd_part == 'f':  # list fields
+                    field = cmd_parts[index + 1]
+                    results = [i for i in indexed['F'] if field in i[2].lower()]
+                elif cmd_part == 'm':  # list methods
+                    method = cmd_parts[index + 1]
+                    results = [i for i in indexed['M'] if method in i[2].lower()]
+                elif cmd_part == 'p':  # list params
+                    param = cmd_parts[index + 1]
+                    results = [i for i in indexed['P'] if param in i[4].lower()]
+                elif cmd_part == 'fc':  # filter classes (on a field, method or class search)
+                    clazz = cmd_parts[index + 1]
+                    results = [r for r in results if clazz in r[1].lower()]
+                elif cmd_part == 'fm':  # filter methods (on a param search)
+                    method = cmd_parts[index + 1]
+                    results = [r for r in results if method in r[2].lower()]
+                elif cmd_part == '[':  # picks a single result
+                    i = int(cmd_parts[index + 1])
+                    results = [results[i]]
+                elif cmd_part == 'gp':  # gets parameters for the first method name
+                    method = results[0]
+                    results = [p for p in indexed['P'] if method[1] == p[1] and method[2] == p[2]]
+                    index -= 1
+                elif cmd_part == 'gm':  # gets methods for each class
+                    clazz = results[0]
+                    results = [m for m in indexed['M'] if clazz[2] == m[1]]
+                    index -= 1
+                elif cmd_part == 'max':  # max results returned
+                    max_show = int(cmd_parts[index + 1])
+
+                index += 2
+
+            for r in results[:max_show]:
+                print(r)
+            if len(results) > max_show:
+                print('First %d results shown. Use max # for more' % max_show)
+            if not results:
+                print('No Results')
+        except Exception as e:
+            print('Error: ' + str(e))
+        cmd = input('>')
 
 
 if __name__ == '__main__':
