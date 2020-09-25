@@ -3,7 +3,7 @@
 
 from typing import Mapping, Optional, Set, Callable, Any
 
-from mappificator.util import utils
+from util import utils
 
 
 class SourceMap:

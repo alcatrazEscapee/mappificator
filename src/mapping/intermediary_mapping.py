@@ -1,8 +1,8 @@
 import csv
 from typing import Tuple, Dict
 
-from mappificator.util import mapping_downloader
-from mappificator.util.sources import SourceMap
+from util import mapping_downloader
+from util.sources import SourceMap
 
 
 def read(mc_version: str):

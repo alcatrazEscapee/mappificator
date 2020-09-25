@@ -11,4 +11,4 @@
 !/build/corrections-*.json
 
 # Source code
-!/mappificator/**/*.py
+!/src/**/*.py

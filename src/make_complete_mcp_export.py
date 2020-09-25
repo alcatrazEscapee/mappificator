@@ -3,10 +3,10 @@
 import re
 from typing import Dict, Set, Any
 
-from mappificator.mapping import official_mapping, srg_mapping, mcp_mapping, spreadsheet_mapping
-from mappificator.util import utils, mapping_downloader
-from mappificator.util.parser import Parser
-from mappificator.util.sources import SourceMap, SourceSetComparison
+from mapping import srg_mapping, mcp_mapping, spreadsheet_mapping, official_mapping
+from util import utils, mapping_downloader
+from util.parser import Parser
+from util.sources import SourceMap, SourceSetComparison
 
 # This is the MCP export version
 # 'complete' identifies the methodology
@@ -78,8 +78,8 @@ def main():
     write_reverse_lookup_log(VERSION, '../build', srg, result)
 
     # Write mcp mappings
-    mcp_mapping.write(VERSION, '../build', result, field_comments, method_comments)
-    mcp_mapping.publish(VERSION, '../build')
+    mcp_mapping.write(VERSION, 'build', result, field_comments, method_comments)
+    mcp_mapping.publish(VERSION, 'build')
 
     print('Done')
 

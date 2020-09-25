@@ -4,8 +4,8 @@ import subprocess
 import zipfile
 from typing import Dict, Tuple, Mapping, Optional
 
-from mappificator.util import mapping_downloader
-from mappificator.util.sources import SourceMap
+from util import mapping_downloader
+from util.sources import SourceMap
 
 
 def read(mc_version: str, mcp_date: Optional[str] = None) -> Tuple[SourceMap, Dict[str, str], Dict[str, str]]:

@@ -1,8 +1,8 @@
 from typing import Tuple, Set
 
-from mappificator.util import mapping_downloader
-from mappificator.util.parser import Parser
-from mappificator.util.sources import SourceMap
+from util import mapping_downloader
+from util.parser import Parser
+from util.sources import SourceMap
 
 
 def read(mc_version: str) -> Tuple[SourceMap, Set]:

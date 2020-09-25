@@ -16,8 +16,8 @@
 # gp - takes the first param from the previous results and returns all matching params
 
 
-from mappificator.make_complete_mcp_export import VERSION
-from mappificator.util.mapping_downloader import CACHE_ROOT
+from make_complete_mcp_export import VERSION
+from util.mapping_downloader import CACHE_ROOT
 
 
 def main():

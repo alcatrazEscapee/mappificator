@@ -1,8 +1,8 @@
 from typing import Tuple, Dict, Optional
 
-from mappificator.util import mapping_downloader
-from mappificator.util.parser import Parser
-from mappificator.util.sources import SourceMap
+from util import mapping_downloader
+from util.parser import Parser
+from util.sources import SourceMap
 
 
 def read(mc_version: str, yarn_version: Optional[str]) -> SourceMap:
