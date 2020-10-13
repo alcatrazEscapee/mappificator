@@ -4,36 +4,49 @@ import csv
 from typing import Tuple, Dict
 
 from util import mapping_downloader
-from util.sources import SourceMap
+from util.sources import SourceMap, SourceSet
 
 
-def read(mc_version: str) -> Tuple[SourceMap, Dict[str, str], Dict[str, str]]:
+def read(mc_version: str) -> Tuple[SourceSet, SourceMap, Dict[str, str], Dict[str, str]]:
     names = mapping_downloader.load_mcp_spreadsheet(mc_version)
-    fields = {}
+
+    all_fields = set()
+    all_methods = set()
+    all_params = set()
+
+    named_fields = {}
+    named_methods = {}
+    named_params = {}
+
     field_comments = {}
-    methods = {}
     method_comments = {}
-    params = {}
 
     for row in csv.reader(names.split('\n')[1:]):
         if row:
             srg_member = row[2]
             named_member = row[3]
-            if named_member != '':
-                if len(row) >= 6 and row[5] != '':
-                    comment = row[5]
-                else:
-                    comment = None
+            if len(row) >= 6 and row[5] != '':
+                comment = row[5]
+            else:
+                comment = None
 
-                if srg_member.startswith('func_'):
-                    methods[srg_member] = named_member
-                    if comment is not None:
-                        method_comments[srg_member] = comment
-                elif srg_member.startswith('field_'):
-                    fields[srg_member] = named_member
-                    if comment is not None:
-                        field_comments[srg_member] = comment
-                elif srg_member.startswith('p_'):
-                    params[srg_member] = named_member
+            if srg_member.startswith('func_'):
+                all_methods.add(srg_member)
+                if named_member != '':
+                    named_methods[srg_member] = named_member
+                if comment is not None:
+                    method_comments[srg_member] = comment
+            elif srg_member.startswith('field_'):
+                all_fields.add(srg_member)
+                if named_member != '':
+                    named_fields[srg_member] = named_member
+                if comment is not None:
+                    field_comments[srg_member] = comment
+            elif srg_member.startswith('p_'):
+                all_params.add(srg_member)
+                if named_member != '':
+                    named_params[srg_member] = named_member
+            else:
+                raise RuntimeError('Unable to parse row: %s' % str(row))
 
-    return SourceMap(fields, methods, params), method_comments, field_comments
+    return SourceSet(all_fields, all_methods, all_params), SourceMap(named_fields, named_methods, named_params), method_comments, field_comments

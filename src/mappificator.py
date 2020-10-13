@@ -40,13 +40,14 @@ def main():
     """ Entry point and argument parser """
     parser = argparse.ArgumentParser(description='The Complete MCP Export')
     parser.add_argument('--cli', action='store_true', dest='cli', help='Run the CLI for mapping reverse engineering.')
-    parser.add_argument('--version', type=str, default='complete-20200912-1.16.3-v5', help='The version of the complete mcp export')
+    parser.add_argument('--version', type=str, default='complete-20200916-1.16.3-v5', help='The version of the complete mcp export')
     parser.add_argument('--cache', type=str, default='../build/', help='The cache folder, to look for downloaded mappings and other static files')
+    parser.add_argument('--stats-only', action='store_true', dest='only_stats', help='Stop after loading and printing statistics for the input mappings.')
 
     # Individual versions
     parser.add_argument('--mc-version', type=str, default='1.16.3', help='The Minecraft version used to download official, srg, and spreadsheet mappings')
     parser.add_argument('--mcp-version', type=str, default='1.16.2', help='The Minecraft version used to download mcp mappings')
-    parser.add_argument('--mcp-date', type=str, default='20200912', help='The snapshot date for the mcp mappings')
+    parser.add_argument('--mcp-date', type=str, default='20200916', help='The snapshot date for the mcp mappings')
 
     args = parser.parse_args()
 
@@ -54,16 +55,16 @@ def main():
     if args.cli:
         cli(args.version)
     else:
-        make(args.version, args.mc_version, args.mcp_version, args.mcp_date)
+        make(args.only_stats, args.version, args.mc_version, args.mcp_version, args.mcp_date)
 
 
-def make(version: str, mc_version: str, mcp_version: str, mcp_date: str):
+def make(stats_only: bool, version: str, mc_version: str, mcp_version: str, mcp_date: str):
     print('Reading mappings...')
 
     mojmap, mojmap_lambdas = official_mapping.read(mc_version)
     srg, srg_indexed_params = srg_mapping.read(mc_version)
     mcp, mcp_method_comments, mcp_field_comments = mcp_mapping.read(mcp_version, mcp_date)
-    ss, ss_method_comments, ss_field_comments = spreadsheet_mapping.read(mc_version)
+    ss_root, ss, ss_method_comments, ss_field_comments = spreadsheet_mapping.read(mc_version)
     manual_mappings = mapping_downloader.load_manual_corrections(mc_version)
 
     print('Validating mappings...')
@@ -91,6 +92,9 @@ def make(version: str, mc_version: str, mcp_version: str, mcp_date: str):
     print_compare(srg_v_ss)
     print('=== MCP Mappings + Spreadsheet ===')
     print_compare(srg_v_both)
+
+    if stats_only:
+        return
 
     # Generate the result mappings
     temp = SourceMap(fields=srg.fields, methods=srg.methods)  # notch -> srg (methods / fields)

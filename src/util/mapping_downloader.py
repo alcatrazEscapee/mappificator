@@ -20,7 +20,9 @@ GIGAHERTZ_MCP_MAVEN_URL = 'https://www.dogforce-games.com/maven/de/oceanlabs/mcp
 TTERRAG_MCP_MAVEN_URL = 'https://maven.tterrag.com/de/oceanlabs/mcp/mcp_snapshot/%s-%s-%s/mcp_snapshot-%s-%s-%s.zip'
 FORGE_MCP_CONFIG_URL = 'https://files.minecraftforge.net/maven/de/oceanlabs/mcp/mcp_config/%s/mcp_config-%s.zip'
 OFFICIAL_MANIFEST_URL = 'https://launchermeta.mojang.com/mc/game/version_manifest.json'
-FORGE_MCP_SPREADSHEET_URL = 'https://docs.google.com/spreadsheets/d/14knNUYjYkKkGpW9VTyjtlhaCTUsPWRJ91GLOFX2d23Q/gviz/tq?tqx=out:csv&sheet=%sMappings'
+FORGE_MCP_SPREADSHEET_URL = 'https://docs.google.com/spreadsheets/u/0/d/14knNUYjYkKkGpW9VTyjtlhaCTUsPWRJ91GLOFX2d23Q/export?gid=1460654099&format=csv'
+
+# API link to get the spreadsheet url: https://spreadsheets.google.com/feeds/worksheets/{fileId}/private/full
 
 DEFAULT_MCP_MAVENS = [GIGAHERTZ_MCP_MAVEN_URL, FORGE_MCP_MAVEN_URL, MCP_BOT_MCP_MAVEN_URL]
 
@@ -287,7 +289,7 @@ def load_mcp_spreadsheet(mc_version: str) -> str:
         with open(path) as f:
             return f.read()
 
-    url = FORGE_MCP_SPREADSHEET_URL % mc_version
+    url = FORGE_MCP_SPREADSHEET_URL
     with urllib.request.urlopen(url) as request:
         text = sanitize_utf8(request.read())
     with open(path, 'w') as f:

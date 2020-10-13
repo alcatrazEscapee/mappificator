@@ -65,11 +65,18 @@ def parse_mcp(text: str) -> Tuple[Dict[str, str], Dict[str, str]]:
     mappings = {}
     comments = {}
 
+    broken_rows = set()
+    broken_mappings = set()
+
     for row in csv.reader(text.split('\n')[1:]):
         if row:
+            if row[0] in mappings:
+                broken_mappings.add(row[0])
             mappings[row[0]] = row[1]
             if row[3] != '':
                 comments[row[0]] = row[3]
+        else:
+            broken_rows.add(tuple(row))
 
     return mappings, comments
 
