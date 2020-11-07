@@ -29,6 +29,10 @@ def parse_intermediary(text: str) -> Tuple[Dict, Dict, Dict]:
         elif row[0] == 'METHOD':
             # notch class, notch method, params -> intermediary method
             methods[(row[1], row[3], row[2])] = row[4]
-            # todo: proper param indexes (need to know static / non-static method and long/double types)
+        elif row[0].startswith('#'):
+            # counter / comment line
+            pass
+        else:
+            raise RuntimeError('Intermediary Mapping Error: Unknown line: %s' % str(row))
 
     return classes, fields, methods
