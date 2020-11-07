@@ -9,13 +9,6 @@ from util import utils, mapping_downloader
 from util.parser import Parser
 from util.sources import SourceMap, SourceSetComparison
 
-# This is the MCP export version
-# 'complete' identifies the methodology
-# 'YYYYMMDD' is the mcp bot export used
-# '#.#.#' is the minecraft version
-# 'v#' is the current iteration
-VERSION = 'complete-20200912-1.16.3-v5'
-
 CLI_HELP = """
 This is an interface similar to K9 used to reverse engineer mapped names. It will read the mapping log file and can show information about all mapped items, search, and filter based on input commands.
 A command consists of a space separated list of elements, which each either produce a set of results, or act upon the previous (current) results. At the end of the statement, the results will be displayed.
@@ -40,14 +33,15 @@ def main():
     """ Entry point and argument parser """
     parser = argparse.ArgumentParser(description='The Complete MCP Export')
     parser.add_argument('--cli', action='store_true', dest='cli', help='Run the CLI for mapping reverse engineering.')
-    parser.add_argument('--version', type=str, default='complete-20200916-1.16.3-v5', help='The version of the complete mcp export')
+    parser.add_argument('--version', type=str, default='complete-20201028-1.16.4', help='The version of the complete mcp export')
     parser.add_argument('--cache', type=str, default='../build/', help='The cache folder, to look for downloaded mappings and other static files')
     parser.add_argument('--stats-only', action='store_true', dest='only_stats', help='Stop after loading and printing statistics for the input mappings.')
+    parser.add_argument('--advanced-comments', action='store_true', dest='advanced_comments', help='Add additional comment lines to every field with the srg name and mcp name (if known)')
 
     # Individual versions
-    parser.add_argument('--mc-version', type=str, default='1.16.3', help='The Minecraft version used to download official, srg, and spreadsheet mappings')
-    parser.add_argument('--mcp-version', type=str, default='1.16.2', help='The Minecraft version used to download mcp mappings')
-    parser.add_argument('--mcp-date', type=str, default='20200916', help='The snapshot date for the mcp mappings')
+    parser.add_argument('--mc-version', type=str, default='1.16.4', help='The Minecraft version used to download official, srg, and spreadsheet mappings')
+    parser.add_argument('--mcp-version', type=str, default='1.16.3', help='The Minecraft version used to download mcp mappings')
+    parser.add_argument('--mcp-date', type=str, default='20201028', help='The snapshot date for the mcp mappings')
 
     args = parser.parse_args()
 
@@ -55,10 +49,11 @@ def main():
     if args.cli:
         cli(args.version)
     else:
-        make(args.only_stats, args.version, args.mc_version, args.mcp_version, args.mcp_date)
+        make(args.only_stats, args.advanced_comments, args.version, args.mc_version, args.mcp_version, args.mcp_date)
+        print('Complete MCP Export Done. Version = \'%s\'' % args.version)
 
 
-def make(stats_only: bool, version: str, mc_version: str, mcp_version: str, mcp_date: str):
+def make(stats_only: bool, advanced_comments: bool, version: str, mc_version: str, mcp_version: str, mcp_date: str):
     print('Reading mappings...')
 
     mojmap, mojmap_lambdas = official_mapping.read(mc_version)
@@ -121,6 +116,11 @@ def make(stats_only: bool, version: str, mc_version: str, mcp_version: str, mcp_
 
     # Write reverse lookup log output
     write_reverse_lookup_log(version, srg, result)
+
+    # Generate srg name comments - do this after actual comments are generated
+    if advanced_comments:
+        generate_advanced_comments(field_comments, result.fields, mcp.fields)
+        generate_advanced_comments(method_comments, result.methods, mcp.methods)
 
     # Write mcp mappings
     mcp_mapping.write(version, result, field_comments, method_comments)
@@ -185,8 +185,8 @@ def generate_param_names(srg: SourceMap, srg_indexed_params: Dict[str, Dict[Any,
                 else:
                     name = generate_param_name(param_type, srg.classes)
 
-                if name in reserved_class_name_params:
-                    name = name + 'In'  # prevent local variable conflicts
+                if name in reserved_class_name_params or name in utils.JAVA_KEYWORDS:
+                    name += 'In'  # prevent local variable conflicts, or names mapped to keywords
 
                 if name in reserved_names:
                     name = resolve_name_conflicts(name, reserved_names)
@@ -214,8 +214,8 @@ def generate_param_names(srg: SourceMap, srg_indexed_params: Dict[str, Dict[Any,
                 else:
                     name = generate_param_name(param_type, srg.classes)
 
-                if name in reserved_class_name_params:
-                    name = name + 'In'  # prevent local variable conflicts
+                if name in reserved_class_name_params or name in utils.JAVA_KEYWORDS:
+                    name += 'In'  # prevent local variable conflicts, or names mapped to keywords
 
                 if name in class_reserved_names:
                     name = resolve_name_conflicts(name, class_reserved_names)
@@ -255,6 +255,18 @@ def resolve_name_conflicts(name: str, reserved_names: Set) -> str:
                 name += '_'
             count += 1
     return name
+
+
+def generate_advanced_comments(comments: Dict[str, str], mapping: Dict[str, str], alternative_mapping: Dict[str, str]):
+    for srg, named in mapping.items():
+        adv_comment = 'Mappings: SRG: ' + srg
+        if srg in alternative_mapping:
+            adv_comment += ', MCP: ' + alternative_mapping[srg]
+
+        if srg in comments:
+            comments[srg] = comments[srg] + '\\n' + adv_comment
+        else:
+            comments[srg] = adv_comment
 
 
 def write_reverse_lookup_log(version: str, srg: SourceMap, result: SourceMap):
@@ -298,7 +310,7 @@ def cli(version: str):
 
     print(CLI_HELP)
 
-    cmd = input('>')
+    cmd = input('\n>')
     while cmd != 'exit':
         try:
             results = []
@@ -356,7 +368,7 @@ def cli(version: str):
                 print('No Results')
         except Exception as e:
             print('Error: ' + str(e))
-        cmd = input('>')
+        cmd = input('\n>')
 
 
 if __name__ == '__main__':
