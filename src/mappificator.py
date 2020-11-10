@@ -7,7 +7,7 @@ from typing import Dict, Set, Any
 from mapping import srg_mapping, mcp_mapping, spreadsheet_mapping, official_mapping
 from util import utils, mapping_downloader
 from util.parser import Parser
-from util.sources import SourceMap, SourceSetComparison
+from util.sources import SourceSet, SourceMap, SourceSetComparison
 
 CLI_HELP = """
 This is an interface similar to K9 used to reverse engineer mapped names. It will read the mapping log file and can show information about all mapped items, search, and filter based on input commands.
@@ -33,10 +33,11 @@ def main():
     """ Entry point and argument parser """
     parser = argparse.ArgumentParser(description='The Complete MCP Export')
     parser.add_argument('--cli', action='store_true', dest='cli', help='Run the CLI for mapping reverse engineering.')
-    parser.add_argument('--version', type=str, default='complete-20201028-1.16.4-v1', help='The version of the complete mcp export')
+    parser.add_argument('--version', type=str, default='complete-20201028-1.16.4', help='The version of the complete mcp export')
     parser.add_argument('--cache', type=str, default='../build/', help='The cache folder, to look for downloaded mappings and other static files')
     parser.add_argument('--stats-only', action='store_true', dest='only_stats', help='Stop after loading and printing statistics for the input mappings.')
     parser.add_argument('--advanced-comments', action='store_true', dest='advanced_comments', help='Add additional comment lines to every field with the srg name and mcp name (if known)')
+    parser.add_argument('--include-spreadsheet', type=str, default='none', choices=['none', 'verified', 'all'], help='If the MCP Spreadsheet mappings should be sourced for parameter names? Warning: Including these names (especially unverified names) may cause mapping issues!')
 
     # Individual versions
     parser.add_argument('--mc-version', type=str, default='1.16.4', help='The Minecraft version used to download official, srg, and spreadsheet mappings')
@@ -49,17 +50,22 @@ def main():
     if args.cli:
         cli(args.version)
     else:
-        make(args.only_stats, args.advanced_comments, args.version, args.mc_version, args.mcp_version, args.mcp_date)
+        make(args.only_stats, args.advanced_comments, args.include_spreadsheet, args.version, args.mc_version, args.mcp_version, args.mcp_date)
         print('Complete MCP Export Done. Version = \'%s\'' % args.version)
 
 
-def make(stats_only: bool, advanced_comments: bool, version: str, mc_version: str, mcp_version: str, mcp_date: str):
+def make(stats_only: bool, advanced_comments: bool, include_spreadsheet: str, version: str, mc_version: str, mcp_version: str, mcp_date: str):
     print('Reading mappings...')
 
     mojmap, mojmap_lambdas = official_mapping.read(mc_version)
     srg, srg_indexed_params = srg_mapping.read(mc_version)
     mcp, mcp_method_comments, mcp_field_comments = mcp_mapping.read(mcp_version, mcp_date)
-    ss_root, ss, ss_method_comments, ss_field_comments = spreadsheet_mapping.read(mc_version)
+
+    # Load spreadsheet mappings or defaults
+    if include_spreadsheet == 'none':
+        ss_root, ss, ss_method_comments, ss_field_comments = SourceSet(), SourceMap(), dict(), dict()
+    else:
+        ss_root, ss, ss_method_comments, ss_field_comments = spreadsheet_mapping.read(mc_version, include_spreadsheet == 'all')
     manual_mappings = mapping_downloader.load_manual_corrections(mc_version)
 
     print('Validating mappings...')

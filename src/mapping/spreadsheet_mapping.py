@@ -7,7 +7,7 @@ from util import mapping_downloader
 from util.sources import SourceMap, SourceSet
 
 
-def read(mc_version: str) -> Tuple[SourceSet, SourceMap, Dict[str, str], Dict[str, str]]:
+def read(mc_version: str, allow_unverified: bool = False) -> Tuple[SourceSet, SourceMap, Dict[str, str], Dict[str, str]]:
     names = mapping_downloader.load_mcp_spreadsheet(mc_version)
 
     all_fields = set()
@@ -24,7 +24,7 @@ def read(mc_version: str) -> Tuple[SourceSet, SourceMap, Dict[str, str], Dict[st
     for row in csv.reader(names.split('\n')[1:]):
         # Quote: "we don't suggest using the unverified ones if you plan on building your own mappings. They are probably broken until verified"
         # And yes, after many encounters they are indeed broken.
-        if row and row[0] == 'TRUE':
+        if row and (allow_unverified or row[0] == 'TRUE'):
             srg_member = row[2]
             named_member = row[3]
             if len(row) >= 6 and row[5] != '':
