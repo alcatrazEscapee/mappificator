@@ -33,7 +33,7 @@ def main():
     """ Entry point and argument parser """
     parser = argparse.ArgumentParser(description='The Complete MCP Export')
     parser.add_argument('--cli', action='store_true', dest='cli', help='Run the CLI for mapping reverse engineering.')
-    parser.add_argument('--version', type=str, default='complete-20201028-1.16.4', help='The version of the complete mcp export')
+    parser.add_argument('--version', type=str, default='complete-20201028-1.16.4-v1', help='The version of the complete mcp export')
     parser.add_argument('--cache', type=str, default='../build/', help='The cache folder, to look for downloaded mappings and other static files')
     parser.add_argument('--stats-only', action='store_true', dest='only_stats', help='Stop after loading and printing statistics for the input mappings.')
     parser.add_argument('--advanced-comments', action='store_true', dest='advanced_comments', help='Add additional comment lines to every field with the srg name and mcp name (if known)')

@@ -22,7 +22,9 @@ def read(mc_version: str) -> Tuple[SourceSet, SourceMap, Dict[str, str], Dict[st
     method_comments = {}
 
     for row in csv.reader(names.split('\n')[1:]):
-        if row:
+        # Quote: "we don't suggest using the unverified ones if you plan on building your own mappings. They are probably broken until verified"
+        # And yes, after many encounters they are indeed broken.
+        if row and row[0] == 'TRUE':
             srg_member = row[2]
             named_member = row[3]
             if len(row) >= 6 and row[5] != '':
