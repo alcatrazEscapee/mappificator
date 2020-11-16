@@ -207,23 +207,31 @@ def load_mcpconfig(mc_version: str) -> Tuple[str, str, str]:
 
 def load_official(mc_version: str) -> Tuple[str, str]:
     # Need to inspect the manifest
-    def load_manifest() -> Dict:
+    def load_manifest(use_cache: bool = True) -> Tuple[Dict, bool]:
         official_manifest = CACHE_ROOT + OFFICIAL_MANIFEST_CACHE
-        if os.path.isfile(official_manifest):
+        if os.path.isfile(official_manifest) and use_cache:
             # Load manifest from cache
             with open(official_manifest) as f_:
                 manifest = f_.read()
+            return json.loads(manifest), True
         else:
             # Download and save manifest
             with urllib.request.urlopen(OFFICIAL_MANIFEST_URL) as request_:
                 manifest = sanitize_utf8(request_.read())
             with open(official_manifest, 'w') as f_:
                 f_.write(manifest)
-        return json.loads(manifest)
+            return json.loads(manifest), False
+
+    def find_game_version_manifest_matching(manifest_json_in: Dict, mc_version_in: str) -> Optional[str]:
+        for game_version_json in manifest_json_in['versions']:
+            if game_version_json['id'] == mc_version_in:
+                return game_version_json['url']
+        return None
 
     manifest_json = None
+    was_cached = False
     if mc_version is None:
-        manifest_json = load_manifest()
+        manifest_json, was_cached = load_manifest()
         mc_version = manifest_json['latest']['release']
 
     # Check the official mapping cache
@@ -245,14 +253,18 @@ def load_official(mc_version: str) -> Tuple[str, str]:
     else:
         # No version manifest, so load the full manifest
         if manifest_json is None:
-            manifest_json = load_manifest()
+            manifest_json, was_cached = load_manifest()
 
         # Find the version manifest matching the mc version
-        for game_version_json in manifest_json['versions']:
-            if game_version_json['id'] == mc_version:
-                version_manifest_url = game_version_json['url']
-                break
-        else:
+        version_manifest_url = find_game_version_manifest_matching(manifest_json, mc_version)
+
+        # If not found, and the manifest was cached, then reload the manifest without caching and try again
+        if version_manifest_url is None and was_cached:
+            manifest_json, was_cached = load_manifest(False)
+            version_manifest_url = find_game_version_manifest_matching(manifest_json, mc_version)
+
+        # If still not none, throw an error
+        if version_manifest_url is None:
             raise ValueError('No manifest entry for game version %s' % mc_version)
 
         # Download and save manifest
