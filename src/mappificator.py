@@ -2,12 +2,12 @@
 
 import argparse
 import re
-from typing import Dict, Set, Any
+from typing import Dict, Tuple, List, Set, Any
 
-from mapping import srg_mapping, mcp_mapping, spreadsheet_mapping, official_mapping
+from mapping import srg_mapping, mcp_mapping, official_mapping, intermediary_mapping, yarn_mapping
 from util import utils, mapping_downloader
 from util.parser import Parser
-from util.sources import SourceSet, SourceMap, SourceSetComparison
+from util.sources import SourceMap, SourceSetComparison
 
 CLI_HELP = """
 This is an interface similar to K9 used to reverse engineer mapped names. It will read the mapping log file and can show information about all mapped items, search, and filter based on input commands.
@@ -31,41 +31,52 @@ Commands:
 
 def main():
     """ Entry point and argument parser """
-    parser = argparse.ArgumentParser(description='The Complete MCP Export')
+
+    parser = argparse.ArgumentParser(description='A collection of bodging scripts to work with Minecraft mappings and alleviate suffering.')
+
     parser.add_argument('--cli', action='store_true', dest='cli', help='Run the CLI for mapping reverse engineering.')
-    parser.add_argument('--version', type=str, default='complete-20201028-1.16.5', help='The version of the complete mcp export')
-    parser.add_argument('--cache', type=str, default='../build/', help='The cache folder, to look for downloaded mappings and other static files')
-    parser.add_argument('--stats-only', action='store_true', dest='only_stats', help='Stop after loading and printing statistics for the input mappings.')
-    parser.add_argument('--advanced-comments', action='store_true', dest='advanced_comments', help='Add additional comment lines to every field with the srg name and mcp name (if known)')
-    parser.add_argument('--include-spreadsheet', type=str, default='none', choices=['none', 'verified', 'all'], help='If the MCP Spreadsheet mappings should be sourced for parameter names? Warning: Including these names (especially unverified names) may cause mapping issues!')
+    parser.add_argument('--version', type=str, default=None, help='Sets the version of the exported mappings.')
+    parser.add_argument('--cache', type=str, default='../build/', help='Sets the cache folder, to save downloaded mapping files and outputs. Default: `../build/`')
+
+    # Mapping sources
+    parser.add_argument('--include-yarn', action='store_true', dest='include_yarn', help='If the exported mappings should source Fabric Yarn mappings for parameter names in addition to method, field, and parameter comments')
+    parser.add_argument('--include-mapping-comments', action='store_true', dest='include_mapping_comments', help='If the exported mappings should include auto-generated comments on every method and field, identifying the method in alternative (srg, intermediary, mcp, and yarn) mapping systems.')
 
     # Individual versions
-    parser.add_argument('--mc-version', type=str, default='1.16.5', help='The Minecraft version used to download official, srg, and spreadsheet mappings')
-    parser.add_argument('--mcp-version', type=str, default='1.16.3', help='The Minecraft version used to download mcp mappings')
-    parser.add_argument('--mcp-date', type=str, default='20201028', help='The snapshot date for the mcp mappings')
+    parser.add_argument('--mc-version', type=str, default='1.16.5', help='The Minecraft version used to download official mappings, and MCP Config')
+    parser.add_argument('--mcp-version', type=str, default='1.16.5', help='The Minecraft version used to download mcp mappings')
+    parser.add_argument('--mcp-date', type=str, default='20210309', help='The snapshot date for the mcp mappings')
+    parser.add_argument('--intermediary-version', type=str, default='1.16.5', help='The Minecraft version used to download Fabric Intermediary, and Yarn mappings')
+    parser.add_argument('--yarn-version', type=str, default='6', help='The build number used for Fabric Yarn mappings')
 
     args = parser.parse_args()
+    version = args.version  # Dynamically assign a version if one was not already
+    if version is None:
+        version = 'complete-%s-%s' % (args.mc_version, args.mcp_date)
+        if args.include_yarn:
+            version += '-yarn%s' % args.yarn_version
+        if args.include_mapping_comments:
+            version += '-c'
 
     mapping_downloader.set_cache_root(args.cache)
     if args.cli:
-        cli(args.version)
+        cli(version)
     else:
-        make(args.only_stats, args.advanced_comments, args.include_spreadsheet, args.version, args.mc_version, args.mcp_version, args.mcp_date)
-        print('Complete MCP Export Done. Version = \'%s\'' % args.version)
+        make(args.include_yarn, args.include_mapping_comments, version, args.mc_version, args.mcp_version, args.mcp_date, args.intermediary_version, args.yarn_version)
+        print('MCP Export Built. Version = \'%s\'' % version)
 
 
-def make(stats_only: bool, advanced_comments: bool, include_spreadsheet: str, version: str, mc_version: str, mcp_version: str, mcp_date: str):
+def make(include_yarn: bool, include_mapping_comments: bool, version: str, mc_version: str, mcp_version: str, mcp_date: str, intermediary_version: str, yarn_version: str):
     print('Reading mappings...')
 
     mojmap, mojmap_lambdas = official_mapping.read(mc_version)
-    srg, srg_indexed_params = srg_mapping.read(mc_version)
-    mcp, mcp_method_comments, mcp_field_comments = mcp_mapping.read(mcp_version, mcp_date)
+    srg, srg_indexed_params, srg_reverse_constructors = srg_mapping.read(mc_version)
+    mcp, mcp_comments = mcp_mapping.read(mcp_version, mcp_date)
 
-    # Load spreadsheet mappings or defaults
-    if include_spreadsheet == 'none':
-        ss_root, ss, ss_method_comments, ss_field_comments = SourceSet(), SourceMap(), dict(), dict()
-    else:
-        ss_root, ss, ss_method_comments, ss_field_comments = spreadsheet_mapping.read(mc_version, include_spreadsheet == 'all')
+    if include_yarn:
+        intermediary = intermediary_mapping.read(intermediary_version)
+        yarn, yarn_comments = yarn_mapping.read(intermediary_version, yarn_version)
+
     manual_mappings = mapping_downloader.load_manual_corrections(mc_version)
 
     print('Validating mappings...')
@@ -81,58 +92,54 @@ def make(stats_only: bool, advanced_comments: bool, include_spreadsheet: str, ve
     srg_v_mcp = srg.values().compare_to(mcp.keys())
     assert srg_v_mcp.right_only.is_empty()
 
-    mcp_v_ss = mcp.keys().compare_to(ss.keys())
-    srg_v_ss = srg.values().compare_to(ss.keys())
-    srg_v_both = srg.values().compare_to(mcp_v_ss.union)
-
-    # Print basic conclusions using official, mojmap and mcp mappings
-
-    print('=== MCP Mappings ===')
-    print_compare(srg_v_mcp)
-    print('=== MCP Spreadsheet ===')
-    print_compare(srg_v_ss)
-    print('=== MCP Mappings + Spreadsheet ===')
-    print_compare(srg_v_both)
-
-    if stats_only:
-        return
-
-    # Generate the result mappings
+    # Map srg -> official
     temp = SourceMap(fields=srg.fields, methods=srg.methods)  # notch -> srg (methods / fields)
     temp = temp.inverse()  # srg -> notch (fuzzy, methods / fields)
     temp = temp.compose(mojmap)  # srg -> official (fuzzy, methods / fields)
     result = temp.select()  # srg -> official (methods / fields)
 
-    # Procedurally generate the rest of the parameters, watching for conflicts with each other.
-    generate_param_names(srg, srg_indexed_params, mcp, ss, manual_mappings, mojmap_lambdas, result)
+    # Load srg -> intermediary and create yarn param and comment maps
+    if include_yarn:
+        srg_to_intermediary = map_srg_to_intermediary(srg, srg_reverse_constructors, intermediary)
+        srg_to_yarn = srg_to_intermediary.compose(yarn, True)
+        srg_to_yarn_comments = srg_to_intermediary.compose(yarn_comments, True)
+    else:
+        srg_to_yarn, srg_to_yarn_comments = SourceMap(), SourceMap()
 
-    print('=== Mojmap + MCP Bot + MCP Spreadsheet + Auto Param ===')
+    # Procedurally generate the rest of the parameters, watching for conflicts with each other.
+    generate_param_names(srg, srg_indexed_params, mcp, srg_to_yarn, manual_mappings, mojmap_lambdas, result)
+
+    print('=== Mappings ===')
     print_compare(srg.values().compare_to(result.keys()))
 
     # Comments
-    field_comments = {}
-    utils.append_mapping(field_comments, mcp_field_comments)
-    utils.append_mapping(field_comments, ss_field_comments)
-    print('Field Comments = %d' % len(field_comments))
+    comments = SourceMap()
 
-    method_comments = {}
-    utils.append_mapping(method_comments, mcp_method_comments)
-    utils.append_mapping(method_comments, ss_method_comments)
-    print('Method Comments = %d' % len(method_comments))
+    # MCP Comments
+    utils.append_mapping(comments.fields, mcp_comments.fields)
+    utils.append_mapping(comments.methods, mcp_comments.methods)
+
+    if include_yarn:
+        append_comments(comments.fields, srg_to_yarn_comments.fields)
+        append_comments(comments.methods, srg_to_yarn_comments.methods)
+
+    print('=== Comments ===')
+    print_compare(srg.values().compare_to(comments.keys()))
+
+    if include_mapping_comments:
+        if include_yarn:
+            append_mapping_comments(comments.fields, ('mcp', mcp.fields), ('intermediary', srg_to_intermediary.fields), ('yarn', srg_to_yarn.fields))
+            append_mapping_comments(comments.methods, ('mcp', mcp.methods), ('intermediary', srg_to_intermediary.methods), ('yarn', srg_to_yarn.methods))
+        else:
+            append_mapping_comments(comments.fields, ('mcp', mcp.fields))
+            append_mapping_comments(comments.methods, ('mcp', mcp.methods))
 
     # Write reverse lookup log output
     write_reverse_lookup_log(version, srg, result)
 
-    # Generate srg name comments - do this after actual comments are generated
-    if advanced_comments:
-        generate_advanced_comments(field_comments, result.fields, mcp.fields)
-        generate_advanced_comments(method_comments, result.methods, mcp.methods)
-
     # Write mcp mappings
-    mcp_mapping.write(version, result, field_comments, method_comments)
+    mcp_mapping.write(version, result, comments.fields, comments.methods)
     mcp_mapping.publish(version)
-
-    print('Done')
 
 
 def print_compare(compare: SourceSetComparison):
@@ -141,7 +148,147 @@ def print_compare(compare: SourceSetComparison):
     print('Params: %d / %d (%.2f%%)' % (len(compare.intersect.params), len(compare.left.params), 100 * len(compare.intersect.params) / len(compare.left.params)))
 
 
-def generate_param_names(srg: SourceMap, srg_indexed_params: Dict[str, Dict[Any, Set]], mcp: SourceMap, ss: SourceMap, manual_params: Dict[str, str], mojmap_lambdas: Set, result: SourceMap):
+def map_srg_to_intermediary(srg: SourceMap, srg_reverse_constructors: Dict[int, Tuple[str, List[str]]], intermediary: SourceMap) -> SourceMap:
+    srg_v_intermediary = srg.keys().compare_to(intermediary.keys())
+    assert not srg_v_intermediary.right_only.classes  # intermediary classes are a subset of srg classes
+
+    # Filter legacy srg classes
+    extra_srg_classes = srg_v_intermediary.left_only.classes
+    print('Removing %d legacy srg classes: %s' % (len(extra_srg_classes), str(sorted(extra_srg_classes))))
+
+    def filter_classes(k, _):
+        if isinstance(k, str):  # classes
+            return k not in extra_srg_classes
+        else:  # methods, fields, and params from that class
+            return k[0] not in extra_srg_classes
+
+    srg = srg.filter(filter_classes)
+
+    srg_v_intermediary = srg.keys().compare_to(intermediary.keys())
+
+    # Assert srg v intermediary classes and fields match
+    assert not srg_v_intermediary.right_only.classes
+    assert not srg_v_intermediary.left_only.classes
+    assert not srg_v_intermediary.right_only.fields
+    assert not srg_v_intermediary.left_only.fields
+
+    # Assert intermediary methods are a subset of srg
+    assert not srg_v_intermediary.right_only.methods
+
+    print('Inspecting method mappings...')
+    print('  %6d extra srg mappings (before fixing inheritance)' % len(srg_v_intermediary.left_only.methods))
+
+    # Fix missing intermediary methods by matching identical srg methods
+    # This fixes issues due to inheritance
+    inverse_srg = utils.invert_mapping(srg.methods)  # srg methods -> notch
+    multiple_matches = set()
+    no_matches = set()
+    intermediary_methods = dict(intermediary.methods)
+    for srg_method, notch_methods in inverse_srg.items():
+        if not srg_method.startswith('func_'):
+            continue  # skip non-srg named methods
+
+        # Map srg -> {all notch} -> {all intermediary}
+        matches = set()
+        for notch_method in notch_methods:
+            if notch_method in intermediary.methods:
+                matches.add(notch_method)
+
+        if matches:  # Any notch -> intermediary matches found
+            if len(matches) == 1:  # Exact match (one notch, one intermediary), add directly
+                match = matches.pop()
+                for notch_method in notch_methods:
+                    intermediary_methods[notch_method] = intermediary.methods[match]
+            else:  # Multiple notch methods
+                intermediary_matches = set(intermediary.methods[m] for m in matches)
+                if len(intermediary_matches) == 1:  # All share the same intermediary method. Map them all
+                    intermediary_method, *_ = intermediary_matches
+                    for notch_method in notch_methods:
+                        intermediary_methods[notch_method] = intermediary_method
+                else:  # Multiple intermediary methods. Pick one at random and map all notch methods to that one.
+                    intermediary_method = intermediary.methods[utils.peek_set(matches)]
+                    for notch_method in notch_methods:
+                        intermediary_methods[notch_method] = intermediary_method
+                    multiple_matches.add((srg_method, frozenset(notch_methods), frozenset(matches), frozenset(intermediary.methods[m] for m in matches)))
+
+        else:  # No matches - these are srg methods that are included from previous versions
+            no_matches.add((srg_method, frozenset(notch_methods)))
+
+    print('  %6d srg methods with no intermediary match' % (len(no_matches)))
+    print('  %6d srg methods with multiple intermediary matches' % (len(multiple_matches)))
+
+    intermediary = SourceMap(intermediary.fields, intermediary_methods, classes=intermediary.classes)
+
+    srg_v_intermediary = srg.keys().compare_to(intermediary.keys())
+
+    print('  %6d extra srg mappings (after fixing inheritance)' % len(srg_v_intermediary.left_only.methods))
+
+    temp = SourceMap(classes=srg.classes, fields=srg.fields, methods=srg.methods)  # notch -> srg (classes / methods / fields)
+    temp = temp.inverse()  # srg -> notch (fuzzy)
+    temp = temp.compose(intermediary, remove_missing=True)  # srg -> intermediary (fuzzy)
+    result = temp.select()  # srg -> intermediary
+
+    # Create a mapping of srg method id -> srg method name (including the notch suffix) for use in looking up param -> methods
+    no_srg_id = set()
+    srg_method_lookup = {}
+    for srg_method in srg.methods.values():
+        match = re.match(srg_mapping.METHOD_PATTERN, srg_method)
+        if match:
+            srg_id = int(match.group(1))
+            if srg_id in srg_method_lookup:
+                assert srg_method_lookup[srg_id] == srg_method  # Should be no duplicate id -> method mappings
+            else:
+                srg_method_lookup[srg_id] = srg_method
+        else:
+            no_srg_id.add(srg_method)
+
+    # Create a mapping from srg -> intermediary classes, for use in method descriptor replacements
+    srg_intermediary_class_method_descriptors = {}
+    for srg_clazz, intermediary_clazz in result.classes.items():
+        srg_intermediary_class_method_descriptors['L%s;' % srg_clazz] = 'L%s;' % intermediary_clazz
+
+    def remap_clazz_desc(clazz: str) -> str:
+        if clazz in srg_intermediary_class_method_descriptors:
+            return srg_intermediary_class_method_descriptors[clazz]
+        return clazz
+
+    # Fill out parameters by inspecting srg param names, and mapping them through to intermediary pairs of (method, index)
+    no_method_matches = set()
+
+    for srg_param in srg.params.values():
+        # Only map parameters that match a unique srg id
+        match = re.match(srg_mapping.PARAMETER_PATTERN, srg_param)
+        if match:
+            # extract the srg method name -> intermediary method. Map the index, and produce a param mapping
+            ctor, srg_id, param_index = match.groups()
+            srg_id = int(srg_id)
+            if ctor == 'i':  # if the param was for a constructor, which are not present in srg or intermediary, but we still need to map params
+                srg_clazz, srg_ctor_params = srg_reverse_constructors[srg_id]
+
+                # First, map the constructor description to intermediary, as yarn constructor parameters require the method descriptor in addition to the index
+                intermediary_clazz = remap_clazz_desc(srg_clazz)
+                intermediary_ctor_params = [remap_clazz_desc(param) for param in srg_ctor_params]
+                intermediary_constructor_desc = '(%s)V' % ''.join(intermediary_ctor_params)
+
+                # Record the parameter as a four-tuple of intermediary class, constructor desc, '<init>', index
+                result.params[srg_param] = (intermediary_clazz, intermediary_constructor_desc, '<init>', param_index)
+            else:
+                srg_method = srg_method_lookup[srg_id]
+                if srg_method in result.methods:
+                    intermediary_method = result.methods[srg_method]
+                    result.params[srg_param] = (intermediary_method, param_index)  # Record the intermediary method / index pair
+                else:
+                    no_method_matches.add((srg_param, srg_id, srg_method))  # Missing srg -> intermediary mapping
+
+    print('Inspecting parameter mappings...')
+    print('  %6d srg params' % len(srg.params))
+    print('  %6d srg methods with a non-unique srg id, cannot map params' % len(no_srg_id))
+    print('  %6d srg -> intermediary param mappings' % len(result.params))
+
+    return result
+
+
+def generate_param_names(srg: SourceMap, srg_indexed_params: Dict[str, Dict[Any, Set]], mcp: SourceMap, yarn: SourceMap, manual_params: Dict[str, str], mojmap_lambdas: Set, result: SourceMap):
     # The set of param names which match class names. These are denied ('In' is suffixed) in order to prevent conflicts with local variables
     reserved_class_name_params = set()
     for srg_class in srg.classes.values():
@@ -178,6 +325,7 @@ def generate_param_names(srg: SourceMap, srg_indexed_params: Dict[str, Dict[Any,
                 # Ignore srg params that don't have a srg id. These will not be accurate (as they'll only work for the first method of this name found) and cause lots of conflicts
                 if not re.match(unique_srg_pattern, srg_param):
                     continue
+
                 # Strict order of precedence of which mapping to apply
                 if srg_param in result.params:  # Already mapped, do not try and remap. Add the name for conflict resolution
                     reserved_names.add(result.params[srg_param])
@@ -186,8 +334,8 @@ def generate_param_names(srg: SourceMap, srg_indexed_params: Dict[str, Dict[Any,
                     name = manual_params[srg_param]
                 elif srg_param in mcp.params:
                     name = mcp.params[srg_param]
-                elif srg_param in ss.params:
-                    name = ss.params[srg_param]
+                elif srg_param in yarn.params:
+                    name = yarn.params[srg_param]
                 else:
                     name = generate_param_name(param_type, srg.classes)
 
@@ -215,8 +363,8 @@ def generate_param_names(srg: SourceMap, srg_indexed_params: Dict[str, Dict[Any,
                     name = manual_params[srg_param]
                 elif srg_param in mcp.params:
                     name = mcp.params[srg_param]
-                elif srg_param in ss.params:
-                    name = ss.params[srg_param]
+                elif srg_param in yarn.params:
+                    name = yarn.params[srg_param]
                 else:
                     name = generate_param_name(param_type, srg.classes)
 
@@ -263,16 +411,26 @@ def resolve_name_conflicts(name: str, reserved_names: Set) -> str:
     return name
 
 
-def generate_advanced_comments(comments: Dict[str, str], mapping: Dict[str, str], alternative_mapping: Dict[str, str]):
-    for srg, named in mapping.items():
-        adv_comment = 'Mappings: SRG: ' + srg
-        if srg in alternative_mapping:
-            adv_comment += ', MCP: ' + alternative_mapping[srg]
-
+def append_comments(comments: Dict[str, str], extra_comments: Dict[str, str]):
+    for srg, comment in extra_comments.items():
         if srg in comments:
-            comments[srg] = comments[srg] + '\\n' + adv_comment
-        else:
-            comments[srg] = adv_comment
+            comment = comments[srg] + '\\n' + comment
+        comments[srg] = comment
+
+
+def append_mapping_comments(comments: Dict[str, str], *mappings: Tuple[str, Dict[str, str]]):
+    mapping_comments = {}  # First, build the series of each mapping comments
+    for mapping_name, mapping in mappings:
+        for srg, named in mapping.items():
+            if srg in mapping_comments:
+                comment = mapping_comments[srg] + ', '
+            else:
+                comment = 'Mappings: ' + srg + ' (srg), '
+            comment += named + ' (' + mapping_name + ')'
+            mapping_comments[srg] = comment
+
+    # Then, append all comments as a single block to the end of existing comments
+    append_comments(comments, mapping_comments)
 
 
 def write_reverse_lookup_log(version: str, srg: SourceMap, result: SourceMap):

@@ -1,20 +1,31 @@
-from typing import Dict, Tuple, Set, Any
+import re
+from typing import Dict, Tuple, List, Set, Any
 
 from util import utils, mapping_downloader
 from util.parser import Parser
 from util.sources import SourceMap
 
+METHOD_PATTERN = re.compile('func_([0-9]+)_([A-Za-z]+)_?')
+PARAMETER_PATTERN = re.compile('p_(i?)([0-9]+)_([0-9]+)_')
 
-def read(mc_version: str) -> Tuple[SourceMap, Dict[str, Dict[Any, Set]]]:
+
+def read(mc_version: str) -> Tuple[SourceMap, Dict[str, Dict[Any, Set]], Dict[int, Tuple[str, List[str]]]]:
+    """
+    Read MCP Config data
+    Returns three structures:
+    - A source map, from notch -> srg, with classes, methods, fields, and parameters (both method and constructor) included
+    - An index for parameters, grouped by class
+    - A lookup for constructors by srg id, to their class and constructor parameters
+    """
     joined, static_methods, constructors = mapping_downloader.load_mcpconfig(mc_version)
 
     classes, methods, fields = parse_mcpconfig_joined_tsrg(joined)
     static_methods = parse_mcpconfig_static_methods(static_methods)
-    constructors = parse_mcpconfig_constructors(constructors)
+    constructors, reverse_constructors = parse_mcpconfig_constructors(constructors)
 
     params, indexed_params = generate_srg_params(classes, methods, static_methods, constructors)
 
-    return SourceMap(fields, methods, params, classes), indexed_params
+    return SourceMap(fields, methods, params, classes), indexed_params, reverse_constructors
 
 
 def parse_mcpconfig_joined_tsrg(srg_joined: str) -> Tuple[Dict, Dict, Dict]:
@@ -60,26 +71,30 @@ def parse_mcpconfig_static_methods(srg_static_methods: str) -> Set:
     return static_methods
 
 
-def parse_mcpconfig_constructors(srg_constructors: str) -> Dict:
-    constructors: Dict = {}
+def parse_mcpconfig_constructors(srg_constructors: str) -> Tuple[Dict[Tuple[str, str, str], int], Dict[int, Tuple[str, List[str]]]]:
+    constructors: Dict[Tuple[str, str, str], int] = {}
+    reverse_constructors: Dict[int, Tuple[str, List[str]]] = {}
     parser = Parser(srg_constructors)
     while not parser.eof():
         srg_id = int(parser.scan_identifier())
         parser.scan(' ')
         srg_class = parser.scan_identifier()
         parser.scan(' ')
-        _, _, desc = parser.scan_java_method_descriptor()
+        _, constructor_params, desc = parser.scan_java_method_descriptor()
         parser.scan('\n')
 
         constructors[(srg_class, '<init>', desc)] = srg_id
+        reverse_constructors[srg_id] = (srg_class, constructor_params)
 
-    return constructors
+    return constructors, reverse_constructors
 
 
 def generate_srg_params(classes: Dict, methods: Dict, static_methods: Set, constructors: Dict) -> Tuple[Dict, Dict[str, Dict[Any, Set]]]:
     """
     Generate srg named parameters by looking through method and constructors
-
+    Computes several structures
+    - A mapping from srg param name -> named param
+    - A mapping from notch classes -> (anon class, notch method, method desc) -> a set of (srg param, srg param desc)
     """
     params = {}
     indexed_params = {}  # class -> method -> params

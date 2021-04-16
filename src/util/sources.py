@@ -59,12 +59,12 @@ class SourceMap:
             utils.invert_mapping(self.params),
             utils.invert_mapping(self.classes))
 
-    def compose(self, other: 'SourceMap') -> 'SourceMap':
+    def compose(self, other: 'SourceMap', remove_missing: bool = False) -> 'SourceMap':
         return SourceMap(
-            utils.compose_mapping(self.fields, other.fields),
-            utils.compose_mapping(self.methods, other.methods),
-            utils.compose_mapping(self.params, other.params),
-            utils.compose_mapping(self.classes, other.classes))
+            utils.compose_mapping(self.fields, other.fields, remove_missing),
+            utils.compose_mapping(self.methods, other.methods, remove_missing),
+            utils.compose_mapping(self.params, other.params, remove_missing),
+            utils.compose_mapping(self.classes, other.classes, remove_missing))
 
     def __str__(self):
         return 'SourceMap: Methods = %d, Fields = %d, Params = %d, Classes = %d' % (len(self.methods), len(self.fields), len(self.params), len(self.classes))
@@ -82,20 +82,17 @@ class FuzzySourceMap(SourceMap):
     def inverse(self) -> 'SourceMap':
         raise RuntimeError('Cannot invert a fuzzy mapping as it is not a functional mapping')
 
-    def compose(self, other: 'SourceMap') -> 'FuzzySourceMap':
+    def compose(self, other: 'SourceMap', remove_missing: bool = False) -> 'FuzzySourceMap':
         return FuzzySourceMap(
-            utils.compose_fuzzy_mapping(self.fields, other.fields),
-            utils.compose_fuzzy_mapping(self.methods, other.methods),
-            utils.compose_fuzzy_mapping(self.params, other.params),
-            utils.compose_fuzzy_mapping(self.classes, other.classes))
+            utils.compose_fuzzy_mapping(self.fields, other.fields, remove_missing),
+            utils.compose_fuzzy_mapping(self.methods, other.methods, remove_missing),
+            utils.compose_fuzzy_mapping(self.params, other.params, remove_missing),
+            utils.compose_fuzzy_mapping(self.classes, other.classes, remove_missing))
 
     def select(self, selector: Optional[Callable[[Set], Any]] = None) -> 'SourceMap':
         """ Using the provided selection strategy, converts this to a functional mapping by only referencing individual values in the codomain. """
-        def peek(s: Set) -> Any:
-            for x in s:
-                return x
         if selector is None:
-            selector = peek
+            selector = utils.peek_set
         return SourceMap(
             dict((k, selector(v)) for k, v in self.fields.items()),
             dict((k, selector(v)) for k, v in self.methods.items()),

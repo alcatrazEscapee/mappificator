@@ -31,16 +31,26 @@ def invert_injective_mapping(d: Mapping) -> Mapping:
     return f
 
 
-def compose_mapping(a: Mapping, b: Mapping) -> Mapping:
-    """ Given a : A -> B, and b : B -> C, returns the composition (a ∘ b) : A -> C """
+def compose_mapping(a: Mapping, b: Mapping, remove_missing: bool = False) -> Mapping:
+    """
+    Given a : A -> B, and b : B1 ⊆ B -> C, returns the composition (a ∘ b) : A -> C
+    - if remove_missing is False, and B1 != B, then this function will throw an error
+    """
     c = dict()
     for k, v in a.items():
-        c[k] = b[v]
+        if v in b:
+            c[k] = b[v]
+        elif not remove_missing:
+            raise ValueError('Mapping b does not map the codomain of a: %s not found in %s' % (v, b))
     return c
 
 
-def compose_fuzzy_mapping(a: Mapping[Any, Set], b: Mapping) -> Mapping[Any, Set]:
-    """ Given a : A -> P{B} and b : B -> C, returns the composition c : A -> P{C} given by ∀ x ∈ A, c(x) = {b(y) : y ∈ a(x)} """
+def compose_fuzzy_mapping(a: Mapping[Any, Set], b: Mapping, remove_missing: bool = False) -> Mapping[Any, Set]:
+    """
+    Given a : A -> P{B} and b : B1 ⊆ B -> C
+    - if remove_missing is False, and B1 != B, then this function will throw an error
+    Returns the composition c : A -> P{C} given by ∀ x ∈ A, c(x) = {b(y) : y ∈ a(x)}
+    """
     c = dict()
     for k, vs in a.items():
         if k not in c:
@@ -49,7 +59,12 @@ def compose_fuzzy_mapping(a: Mapping[Any, Set], b: Mapping) -> Mapping[Any, Set]
         else:
             ls = c[k]
         for v in vs:
-            ls.add(b[v])
+            if v in b:
+                ls.add(b[v])
+            elif not remove_missing:
+                raise ValueError('Mapping b does not map the codomain of a: %s not found in %s' % (v, b))
+        if not ls and remove_missing:
+            del c[k]
     return c
 
 
@@ -78,3 +93,8 @@ def split_set(s: Set, predicate: Callable[[Any], bool]) -> Tuple[Set, Set]:
         else:
             not_p.add(i)
     return p, not_p
+
+
+def peek_set(s: Set) -> Any:
+    for x in s:
+        return x

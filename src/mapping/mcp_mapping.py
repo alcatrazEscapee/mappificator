@@ -8,14 +8,14 @@ from util import mapping_downloader
 from util.sources import SourceMap
 
 
-def read(mc_version: str, mcp_date: Optional[str] = None) -> Tuple[SourceMap, Dict[str, str], Dict[str, str]]:
+def read(mc_version: str, mcp_date: Optional[str] = None) -> Tuple[SourceMap, SourceMap]:
     methods, fields, params = mapping_downloader.load_mcp_mappings(mc_version, mcp_date)
 
     methods, method_comments = parse_mcp(methods)
     fields, fields_comments = parse_mcp(fields)
     params = parse_mcp_params(params)
 
-    return SourceMap(fields, methods, params), method_comments, fields_comments
+    return SourceMap(fields, methods, params), SourceMap(methods=method_comments, fields=fields_comments)
 
 
 def write(version: str, source_map: SourceMap, field_comments: Optional[Mapping] = None, method_comments: Optional[Mapping] = None):
@@ -38,6 +38,7 @@ def publish(version: str):
     if not os.path.isfile(file_path):
         raise ValueError('Must first build export before publishing to maven local')
 
+    print('Publishing export to maven local...')
     proc = subprocess.Popen('mvn install:install-file -Dfile=%s -DgroupId=de.oceanlabs.mcp -DartifactId=mcp_snapshot -Dversion=%s -Dpackaging=zip' % (file_path, version), shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     while proc.poll() is None:
         output = proc.stdout.readline().decode('utf-8').replace('\r', '').replace('\n', '')
@@ -46,6 +47,7 @@ def publish(version: str):
     mvn_ret_code = proc.wait()  # catch return code
     if mvn_ret_code != 0:
         raise ValueError('Maven install returned error code %s' % str(mvn_ret_code))
+    print('Maven returned successfully!')
 
 
 class BufferedWriter:
