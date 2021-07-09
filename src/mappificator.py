@@ -1,10 +1,10 @@
 # This is why we can't have nice things
 
-import argparse
 import re
 from typing import Dict, Tuple, List, Set, Any
 
-from mapping import srg_mapping, mcp_mapping, official_mapping, intermediary_mapping, yarn_mapping
+from mapping import official_mapping, intermediary_mapping, yarn_mapping, parchment_mapping
+from mapping.parchment_mapping import Parchment
 from util import utils, mapping_downloader
 from util.parser import Parser
 from util.sources import SourceMap, SourceSetComparison
@@ -32,11 +32,62 @@ Commands:
 def main():
     """ Entry point and argument parser """
 
+    mc_version = '1.17'
+    yarn_version = '9'
+    parchment_version = '2021.07.04-nightly-SNAPSHOT'
+
+    # mojmap, mojmap_lambdas = official_mapping.read('1.17')
+    obf_to_moj, full, parchment, method_inheritance = parchment_mapping.read(mc_version, parchment_version)
+
+    # mojmap_v_blackstone = mojmap.keys().compare_to(obf_to_moj.keys())
+    # full_v_named = full.compare_to(named)
+
+    intermediary = intermediary_mapping.read(mc_version)
+    yarn, yarn_comments = yarn_mapping.read(mc_version, yarn_version)
+
+    moj_v_intermediary = obf_to_moj.keys().compare_to(intermediary.keys())
+
+    intermediary_methods = dict(intermediary.methods)
+    for method in obf_to_moj.methods.keys():
+        if method not in intermediary.methods and method in method_inheritance:
+            obf_class, obf_method, obf_desc = method
+            for override_obf_class in method_inheritance[method]:
+                key = override_obf_class, obf_method, obf_desc
+                if key in intermediary.methods:
+                    intermediary_methods[method] = intermediary.methods[key]
+                    break
+
+    intermediary.methods = intermediary_methods
+    moj_v_intermediary_fixed = obf_to_moj.keys().compare_to(intermediary.keys())
+
+    print('Done')
+
+
+def create_merged_mappings(named: Parchment, parchment: Parchment, intermediary: SourceMap, yarn: SourceMap, yarn_docs: SourceMap):
+    # Copy package level docs from parchment
+    for key, named_package in named.packages.items():
+        if key in parchment.packages:
+            named_package.docs += parchment.packages[key].docs
+
+    # Copy class level docs from parchment, and optionally apply yarn docs and comments
+    for key, named_class in named.classes.items():
+        if key in parchment.classes:
+            parchment_class = parchment.classes[key]
+            named_class.docs += parchment_class.docs
+        if key in intermediary.classes:
+            intermediary_class = intermediary.classes[key]
+            docs = ['']
+            if intermediary_class in yarn.classes:
+                docs.append('Yarn: {@code %s}' % yarn.classes[intermediary.classes[key]])
+            if intermediary_class in yarn_docs.classes:
+                docs.append(list(yarn_docs.classes[intermediary_class].split('\n')))
+
+
+"""
     parser = argparse.ArgumentParser(description='A collection of bodging scripts to work with Minecraft mappings and alleviate suffering.')
 
     parser.add_argument('--cli', action='store_true', dest='cli', help='Run the CLI for mapping reverse engineering.')
     parser.add_argument('--version', type=str, default=None, help='Sets the version of the exported mappings.')
-    parser.add_argument('--cache', type=str, default='../build/', help='Sets the cache folder, to save downloaded mapping files and outputs. Default: `../build/`')
 
     # Mapping sources
     parser.add_argument('--include-yarn', action='store_true', dest='include_yarn', help='If the exported mappings should source Fabric Yarn mappings for parameter names in addition to method, field, and parameter comments')
@@ -58,12 +109,12 @@ def main():
         if args.include_mapping_comments:
             version += '-c'
 
-    mapping_downloader.set_cache_root(args.cache)
     if args.cli:
         cli(version)
     else:
         make(args.include_yarn, args.include_mapping_comments, version, args.mc_version, args.mcp_version, args.mcp_date, args.intermediary_version, args.yarn_version)
         print('MCP Export Built. Version = \'%s\'' % version)
+"""
 
 
 def make(include_yarn: bool, include_mapping_comments: bool, version: str, mc_version: str, mcp_version: str, mcp_date: str, intermediary_version: str, yarn_version: str):
@@ -77,7 +128,7 @@ def make(include_yarn: bool, include_mapping_comments: bool, version: str, mc_ve
         intermediary = intermediary_mapping.read(intermediary_version)
         yarn, yarn_comments = yarn_mapping.read(intermediary_version, yarn_version)
 
-    manual_mappings = mapping_downloader.load_manual_corrections(mc_version)
+    manual_mappings = mapping_downloader.load_corrections(mc_version)
 
     print('Validating mappings...')
 

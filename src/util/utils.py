@@ -98,3 +98,7 @@ def split_set(s: Set, predicate: Callable[[Any], bool]) -> Tuple[Set, Set]:
 def peek_set(s: Set) -> Any:
     for x in s:
         return x
+
+
+def or_else(d: Mapping, k: Any, v: Any) -> Any:
+    return d[k] if k in d else v

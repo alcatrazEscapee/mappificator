@@ -12,7 +12,7 @@ class SourceMap:
     All mappable fields (classes, fields, methods, and parameters) are stored as dictionaries
     This provides convenience methods for manipulating the overall mapping, as well as viewing the domain and codomain of this map
 
-    Due to the nature of this class, it is always a surjective mapping from A -> B. It may or may not be injective, so the act of performing an inverse results in a InverseSourceMap, which can be transformed into a SourceMap if desired
+    Due to the nature of this class, it is always a surjective mapping from A -> B. It may or may not be injective, so the act of performing an inverse results in a FuzzySourceMap, which can be transformed into a SourceMap if desired
     """
 
     def __init__(self, fields: Optional[Mapping] = None, methods: Optional[Mapping] = None, params: Optional[Mapping] = None, classes: Optional[Mapping] = None):

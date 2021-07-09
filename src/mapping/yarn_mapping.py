@@ -1,12 +1,12 @@
-from typing import Tuple, Optional
+from typing import Tuple
 
 from util import mapping_downloader
 from util.parser import Parser
 from util.sources import SourceMap
 
 
-def read(mc_version: str, yarn_version: Optional[str] = None) -> Tuple[SourceMap, SourceMap]:
-    yarn_v2 = mapping_downloader.load_yarn_v2(mc_version, yarn_version)
+def read(mc_version: str, yarn_version: str) -> Tuple[SourceMap, SourceMap]:
+    yarn_v2 = mapping_downloader.load_yarn(mc_version, yarn_version)
     return parse_yarn_v2(yarn_v2)
 
 

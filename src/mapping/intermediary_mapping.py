@@ -6,7 +6,7 @@ from util.sources import SourceMap
 
 
 def read(mc_version: str):
-    yarn_intermediary = mapping_downloader.load_yarn_intermediary(mc_version)
+    yarn_intermediary = mapping_downloader.load_fabric_intermediary(mc_version)
     classes, fields, methods = parse_intermediary(yarn_intermediary)
 
     return SourceMap(fields, methods, classes=classes)

@@ -65,11 +65,7 @@ def parse_official(text: str) -> Tuple[SourceMap, Set]:
                 if params == ['']:  # Skip empty param lists from splitting
                     params = []
                 params = tuple(params)  # Replace package names with '/'
-
-                # Ignore static initializers and constructors
-                if notch_member != '<clinit>' and notch_member != '<init>':
-                    temp_methods[(notch_class, notch_member, member_type, tuple(params))] = mojmap_method
-
+                temp_methods[(notch_class, notch_member, member_type, tuple(params))] = mojmap_method
             else:
                 # Field
                 sources.fields[(notch_class, notch_member)] = mojmap_member

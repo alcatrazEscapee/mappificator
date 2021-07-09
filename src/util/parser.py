@@ -22,6 +22,8 @@ class Parser:
     }
     FIELD_DESCRIPTOR_NAMES_INVERSE = dict((v, k) for k, v in FIELD_DESCRIPTOR_NAMES.items())
 
+    ACC_STATIC = 8
+
     def __init__(self, text: str):
         self.text = text
         self.pointer = 0
@@ -136,7 +138,7 @@ class Parser:
             raise ValueError('The provided descriptor %s was not a valid type descriptor' % desc)
 
     @staticmethod
-    def decode_java_method_descriptor(desc: str):
+    def decode_java_method_descriptor(desc: str) -> Tuple[str, List[str]]:
         parser = Parser(desc)
         parser.scan('(')
         params = []
