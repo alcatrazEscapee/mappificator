@@ -1,44 +1,39 @@
 # A simple lexical scanner / parser, for simple text based parsing
 # Supports many common requirements for all mapping formats
 
-from typing import Optional, Set, Tuple, Dict, List
+from typing import Optional, Set, Tuple, List
 
 
 class Parser:
-    IDENTIFIER_CHARS = set('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789/-_$;()[]<>.,')
-    ALPHA_CHARS = set('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz')
-    NUMERIC_CHARS = set('0123456789')
+    """
+    A simple lexical scanner / parser which is able to handle reading sequentially from strings.
+    Provides several convenience methods for scanning, as well as basic error handling and reporting
+    """
 
-    FIELD_DESCRIPTOR_NAMES = {
-        'byte': 'B',
-        'char': 'C',
-        'double': 'D',
-        'float': 'F',
-        'int': 'I',
-        'long': 'J',
-        'short': 'S',
-        'boolean': 'Z',
-        'void': 'V'
-    }
-    FIELD_DESCRIPTOR_NAMES_INVERSE = dict((v, k) for k, v in FIELD_DESCRIPTOR_NAMES.items())
-
-    ACC_STATIC = 8
+    NUMERIC = set('0123456789')
+    ALPHA = set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ')
+    SYMBOLS = set('/-_$()[]<>.,;')
+    IDENTIFIER = NUMERIC | ALPHA | SYMBOLS
 
     def __init__(self, text: str):
         self.text = text
         self.pointer = 0
 
-    def eof(self) -> bool:
+    def end(self) -> bool:
+        """ If the pointer is at the end of the text """
         return self.pointer >= len(self.text)
 
     def next(self) -> str:
+        """ Get the character at the parser's current pointer """
         return self.text[self.pointer]
 
-    def scan_until(self, end: str) -> str:
+    def scan_until(self, end: str, include_end: bool = True) -> str:
+        """ Scans until the provided end sequence is reached, returning the substring up to that point. """
         identifier = ''
-        while not self.eof():
+        while not self.end():
             if self.try_scan(end):
-                identifier += end
+                if include_end:
+                    identifier += end
                 break
             identifier += self.next()
             self.pointer += 1
@@ -46,9 +41,11 @@ class Parser:
 
     def scan(self, expected: str):
         if not self.try_scan(expected):
-            self.error('Unexpected EoF, expected %s' % repr(expected))
+            actual = repr(self.text[self.pointer:min(len(self.text), self.pointer + len(expected))])
+            self.error('Expected %s, got %s' % (repr(expected), actual))
 
     def try_scan(self, expected: str) -> bool:
+        """ Returns True if the substring at the parser's pointer matches the expected string """
         size = len(expected)
         if self.pointer + size > len(self.text):
             return False
@@ -59,18 +56,21 @@ class Parser:
             return False
 
     def scan_identifier(self, chars: Optional[Set[str]] = None) -> str:
+        """ Scans a sequence of characters from the provided character set. """
         if chars is None:
-            chars = Parser.IDENTIFIER_CHARS
+            chars = Parser.IDENTIFIER
         identifier = ''
-        while not self.eof():
+        while not self.end():
             c = self.text[self.pointer]
             if c in chars:
                 identifier += c
                 self.pointer += 1
             else:
                 return identifier
+        return identifier
 
     def scan_java_method_descriptor(self) -> Tuple[str, List[str], str]:
+        """ Scans a java method descriptor. Returns the return type, parameter types, and the entire descriptor """
         self.scan('(')
         desc = '('
         params = []
@@ -85,6 +85,7 @@ class Parser:
         return ret_type, params, desc
 
     def scan_type(self) -> str:
+        """ Scans a single element of a java method descriptor. Returns the element. """
         identifier = ''
         while self.next() == '[':
             self.scan('[')
@@ -96,54 +97,22 @@ class Parser:
             self.pointer += 1
         return identifier
 
-    def error(self, error_msg):
-        print('Parser Error: %s' % error_msg)
-        line_num = self.text[:self.pointer].count('\n')
-        print('Around: %s' % repr(self.text[self.pointer - 3:self.pointer + 3]))
-        print('Line %d:\n%s' % (line_num, repr(self.text.split('\n')[line_num])))
-        raise RuntimeError('Stacktrace')
-
-    @staticmethod
-    def convert_type_to_descriptor(name: str, remap: Dict[str, str]):
-        desc = ''
-        # Array levels
-        while len(name) > 2 and name[-2:] == '[]':
-            name = name[:-2]
-            desc += '['
-        if name in Parser.FIELD_DESCRIPTOR_NAMES:
-            # Primitive type
-            desc += Parser.FIELD_DESCRIPTOR_NAMES[name]
-        else:
-            # Object
-            if name in remap:
-                name = remap[name]
-            desc += 'L' + name + ';'
-        return desc
-
-    @staticmethod
-    def convert_descriptor_to_type(desc: str, remap: Dict[str, str]) -> Tuple[str, int]:
-        name = desc[:]
-        arrays = 0
-        while name.startswith('['):
-            name = name[1:]
-            arrays += 1
-        if name in Parser.FIELD_DESCRIPTOR_NAMES_INVERSE:
-            return Parser.FIELD_DESCRIPTOR_NAMES_INVERSE[name], arrays
-        elif name.startswith('L') and name.endswith(';'):
-            name = name[1:-1]
-            if name in remap:
-                name = remap[name]
-            return name, arrays
-        else:
-            raise ValueError('The provided descriptor %s was not a valid type descriptor' % desc)
-
-    @staticmethod
-    def decode_java_method_descriptor(desc: str) -> Tuple[str, List[str]]:
-        parser = Parser(desc)
-        parser.scan('(')
-        params = []
-        while parser.next() != ')':
-            params.append(parser.scan_type())
-        parser.scan(')')
-        ret_type = parser.scan_type()
-        return ret_type, params
+    def error(self, error_msg: str):
+        """ Triggers a parser error with basic diagnostic information """
+        lines = self.text.split('\n')
+        count = 0
+        for line_no, line in enumerate(lines):
+            if count + len(line) + 1 < self.pointer:  # +1 for the newline that gets stripped out
+                count += len(line) + 1
+            else:  # pointer is in this line
+                p = self.pointer - count
+                lhs = repr(line[:p])[:-1]
+                rhs = repr(line[p:])[1:]
+                target = ' ' * len(lhs) + '^' + ' ' * (len(rhs) - 1)
+                raise RuntimeError('\n'.join([
+                    'Parser encountered an error',
+                    repr(line),
+                    target,
+                    error_msg,
+                    '  at line %d, col %d' % (1 + line_no, p)
+                ]))

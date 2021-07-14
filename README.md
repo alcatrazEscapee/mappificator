@@ -1,14 +1,11 @@
 # Mappificator
 
-This is a pile of bodging scripts for playing around with Minecraft modding mappings. It is currently able to work with Official, MCP, Yarn, MCP Config Tsrg, and Fabric Intermediary mappings, and provides a host of methods and parsers to analyze and mix various mapping sets.
+This is a pile of bodging scripts for playing around with Minecraft modding mappings, including working with Fabric Yarn, Intermediary, Official, and Parchment mappings. The primary purpose is to create an alternate mapping set for Forge mod development. This exists as an alternative to default Parchment mappings for several reasons:
 
-The output of this tool is to create a local mcp-style mapping export, which merges:
-
-- Official (Mojmap) field and methods.
-- Parameter names and comments from MCP snapshots, and Yarn (if desired)
-- Auto-generated parameter names for unmapped names, based on the parameter type. (i.e. `blockPos1_` instead of `p_123123_1_`)
-- Manually named and/or correct parameters, which are included from `corrections-1.x.x.json`
-- Additional comments for every method and field with the SRG and MCP name (Intermediary and Yarn as well if desired) of the item in question.
+- Parchment mappings (for good reason) include a `p` prefix on every parameter. Mappificator does not apply this, and uses a more targeted system of parameter conflict resolution that can be specifically applied and verified for Forge.
+- Parchment does not include mappings for lambda methods or anonymous classes, again due to conflict resolution issues. Mappificator does.
+- Missing parameter mappings are auto named based on their type for extra readability (e.g. `BlockPos p_28739483` maps to `BlockPos blockPos_`)
+- Parameter names and javadoc comments from Yarn are appended to the mappings, including comments identifying the Yarn field or method by name.
 
 All required materials to generate this mapping export are downloaded and cached locally, and the mapping is built and uploaded to the user's local maven repository. This is then able to be referenced by Forge Gradle through using a custom mapping version. As of time of writing, this is an unfortunate necessity due to 1. a lack of a Forge Gradle API for custom mappings, and 2. legal issues surrounding the official mappings, which means they cannot be distributed.
 

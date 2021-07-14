@@ -1,104 +1,124 @@
-from typing import Mapping, MutableMapping, Any, Set, Callable, Tuple
+from typing import Mapping, Any, Sequence, Dict, TypeVar, Tuple, List
 
-JAVA_KEYWORDS = {'abstract', 'assert', 'boolean', 'break', 'byte', 'case', 'catch', 'char', 'class', 'const', 'continue', 'default', 'do', 'double', 'else', 'enum', 'extends', 'final', 'finally', 'float', 'for', 'goto', 'if', 'implements', 'import', 'instanceof', 'int', 'interface', 'long', 'native', 'new', 'package', 'private', 'protected', 'public', 'return', 'short', 'static', 'strictfp', 'super', 'switch', 'synchronized', 'this', 'throw', 'throws', 'transient', 'try', 'void', 'volatile', 'while'}
+from util.parser import Parser
 
-
-def append_mapping(a: MutableMapping, b: Mapping):
-    for k, v in b.items():
-        if k not in a:
-            a[k] = v
+K = TypeVar('K')
+V = TypeVar('V')
 
 
-def invert_mapping(d: Mapping) -> Mapping[Any, Set]:
-    """ Given a mapping a : A -> B, not necessarily injective, returns the map a' : B -> P{A} such that ∀ x ∈ A, x ∈ (a' ∘ a)(x) """
-    f = dict()
-    for k, v in d.items():
-        if v not in f:
-            f[v] = {k}
-        else:
-            f[v].add(k)
-    return f
-
-
-def invert_injective_mapping(d: Mapping) -> Mapping:
-    """ Given an injective mapping a : A -> B, returns the map a' : B -> A """
-    f = dict()
-    for k, v in d.items():
-        if v not in f:
-            f[v] = k
-        else:
-            raise ValueError('Tried to injective invert a non-injective mapping')
-    return f
-
-
-def compose_mapping(a: Mapping, b: Mapping, remove_missing: bool = False) -> Mapping:
-    """
-    Given a : A -> B, and b : B1 ⊆ B -> C, returns the composition (a ∘ b) : A -> C
-    - if remove_missing is False, and B1 != B, then this function will throw an error
-    """
-    c = dict()
-    for k, v in a.items():
-        if v in b:
-            c[k] = b[v]
-        elif not remove_missing:
-            raise ValueError('Mapping b does not map the codomain of a: %s not found in %s' % (v, b))
-    return c
-
-
-def compose_fuzzy_mapping(a: Mapping[Any, Set], b: Mapping, remove_missing: bool = False) -> Mapping[Any, Set]:
-    """
-    Given a : A -> P{B} and b : B1 ⊆ B -> C
-    - if remove_missing is False, and B1 != B, then this function will throw an error
-    Returns the composition c : A -> P{C} given by ∀ x ∈ A, c(x) = {b(y) : y ∈ a(x)}
-    """
-    c = dict()
-    for k, vs in a.items():
-        if k not in c:
-            ls = set()
-            c[k] = ls
-        else:
-            ls = c[k]
-        for v in vs:
-            if v in b:
-                ls.add(b[v])
-            elif not remove_missing:
-                raise ValueError('Mapping b does not map the codomain of a: %s not found in %s' % (v, b))
-        if not ls and remove_missing:
-            del c[k]
-    return c
-
-
-def filter_keys(m: Mapping, keys: Set, inverse: bool = False) -> Mapping:
-    """ Given m : A -> B, returns the restriction a | keys, or a | keys' if inverse """
-    return dict((k, v) for k, v in m.items() if (k in keys) != inverse)
-
-
-def filter_values(m: Mapping, values: Set, inverse: bool = False) -> Mapping:
-    """ Given m : A -> B, returns the restriction on the codomain a | {x ∈ A : m(a) ∉ values }, ' if inverse """
-    return dict((k, v) for k, v in m.items() if (v in values) != inverse)
-
-
-def filter_mapping(m: Mapping, predicate: Callable[[Any, Any], bool]) -> Mapping:
-    """ Given m : A -> B, and predicate : A x B -> bool, returns the restriction m' : {x : ∀ x ∈ A, predicate(a, m(a)) } -> B """
-    return dict((k, v) for k, v in m.items() if predicate(k, v))
-
-
-def split_set(s: Set, predicate: Callable[[Any], bool]) -> Tuple[Set, Set]:
-    """ Given a set S and predicate P, let T = { s ∈ S : P(s) }. Returns T, T' """
-    p = set()
-    not_p = set()
-    for i in s:
-        if predicate(i):
-            p.add(i)
-        else:
-            not_p.add(i)
-    return p, not_p
-
-
-def peek_set(s: Set) -> Any:
-    for x in s:
-        return x
-
-
-def or_else(d: Mapping, k: Any, v: Any) -> Any:
+def or_else(d: Mapping[K, V], k: K, v: V = None) -> V:
     return d[k] if k in d else v
+
+
+def filter_none(data: Any) -> Any:
+    # Removes all "None" entries in a dictionary, list or tuple, recursively
+    if isinstance(data, Dict):
+        return dict((key, filter_none(value)) for key, value in data.items() if value is not None)
+    elif is_sequence(data):
+        return [filter_none(p) for p in data if p is not None]
+    elif data is not None:
+        return data
+    else:
+        raise ValueError('None passed to `del_none`, should not be possible.')
+
+
+def is_sequence(data_in: Any) -> bool:
+    return isinstance(data_in, Sequence) and not isinstance(data_in, str)
+
+
+# Java Utilities
+
+
+def convert_type_to_descriptor(name: str) -> str:
+    """ Converts a java type (such as 'int', 'String', 'bool[]') into the respective descriptor (such as 'I', 'Lnet/java/String;', '[Z')
+    Optionally will remap objects using the provided dictionary
+    """
+    parser = Parser(name)
+    for key, desc in JAVA_TYPE_TO_DESCRIPTOR.items():
+        if parser.try_scan(key):
+            break
+    else:
+        desc = 'L%s;' % parser.scan_identifier(Parser.IDENTIFIER - set('[]'))
+
+    arrays = 0
+    while parser.try_scan('[]'):
+        arrays += 1
+    return '[' * arrays + desc
+
+
+def convert_descriptor_to_type(desc: str) -> Tuple[str, int]:
+    """ Converts a java descriptor to the java type, in the inverse of convert_descriptor_to_type()
+    Returns the type, and the number of array levels (e.g. [[Z would return ('boolean', 2), not 'boolean[][]'
+    Optionally will remap objects using the provided dictionary
+    """
+    parser = Parser(desc)
+    arrays = 0
+    while parser.try_scan('['):
+        arrays += 1
+    key = parser.next()
+    if key in JAVA_DESCRIPTOR_TO_TYPE:
+        return JAVA_DESCRIPTOR_TO_TYPE[key], arrays
+    else:
+        parser.scan('L')
+        name = parser.scan_until(';', False)
+        return name, arrays
+
+
+def remap_descriptor(desc: str, remap: Dict[str, str]) -> str:
+    parser = Parser(desc)
+    arrays = 0
+    while parser.next() == '[':
+        parser.scan('[')
+        arrays += 1
+    arrays = '[' * arrays
+    key = parser.next()
+    if key in JAVA_DESCRIPTOR_TO_TYPE:
+        return arrays + key
+    else:
+        parser.scan('L')
+        cls = parser.scan_until(';', False)
+        cls = or_else(remap, cls, cls)
+        return arrays + 'L%s;' % cls
+
+
+def remap_method_descriptor(desc: str, remap: Dict[str, str]) -> str:
+    """ Remaps a java method descriptor from one class naming scheme to another """
+    ret_type, param_types = split_method_descriptor(desc)
+    ret_type = remap_descriptor(ret_type, remap)
+    param_types = [remap_descriptor(param_type, remap) for param_type in param_types]
+    return '(%s)%s' % (''.join(param_types), ret_type)
+
+
+def split_method_descriptor(desc: str) -> Tuple[str, List[str]]:
+    """ Extracts individual elements from a java method descriptor
+    Returns the return type, and a list of the parameter types
+    """
+    parser = Parser(desc)
+    parser.scan('(')
+    params = []
+    while parser.next() != ')':
+        params.append(parser.scan_type())
+    parser.scan(')')
+    ret_type = parser.scan_type()
+    return ret_type, params
+
+
+# Various Java constants
+
+JAVA_KEYWORDS = {'abstract', 'assert', 'boolean', 'break', 'byte', 'case', 'catch', 'char', 'class', 'const', 'continue', 'default', 'do', 'double', 'else', 'enum', 'extends', 'final', 'finally', 'float', 'for', 'goto', 'if', 'implements', 'import', 'instanceof', 'int', 'interface', 'long', 'native', 'new', 'package', 'private', 'protected', 'public', 'return', 'short', 'static', 'strictfp', 'super', 'switch', 'synchronized', 'this', 'throw', 'throws', 'transient', 'try', 'void', 'volatile', 'while', 'true', 'false', 'null'}
+
+JAVA_TYPE_TO_DESCRIPTOR = {
+    'byte': 'B',
+    'char': 'C',
+    'double': 'D',
+    'float': 'F',
+    'int': 'I',
+    'long': 'J',
+    'short': 'S',
+    'boolean': 'Z',
+    'void': 'V'
+}
+JAVA_DESCRIPTOR_TO_TYPE = dict((v, k) for k, v in JAVA_TYPE_TO_DESCRIPTOR.items())
+
+ACC_STATIC = 8
+ACC_SYNTHETIC = 4096
