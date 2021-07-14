@@ -15,8 +15,12 @@ def main():
 
     parser = argparse.ArgumentParser(description='A collection of bodging scripts to work with Minecraft mappings and alleviate suffering.')
 
-    parser.add_argument('--version', type=str, default=None, help='Sets the version of the exported mappings.')
-    parser.add_argument('--skip-publish', action='store_true', dest='skip_publish', default=False, help='Skips publishing and only writes the export locally to ./build/')
+    parser.add_argument('-v', '--version', type=str, default=None, help='Sets the version of the exported mappings.')
+    parser.add_argument('-p', '--publish', action='store_true', dest='publish', default=False, help='Publish the export to the user\'s maven local')
+
+    # Options
+    parser.add_argument('--providers', nargs='+', choices=('parchment', 'crane', 'yarn'), default=('parchment', 'crane', 'yarn'), help='Providers to source mappings from.')
+    parser.add_argument('--improved-lambda-conflict-avoidance', action='store_true', dest='improved_lambda_conflict_avoidance', default=False, help='Enables an enhanced method for avoiding lambda parameter conflicts, by grouping lambda parameters local to their owning method(s) as determined by the official name of the lambda in source.')
 
     # Individual versions
     parser.add_argument('--mc-version', type=str, default='1.17', help='The Minecraft version')
@@ -27,30 +31,39 @@ def main():
     args = parser.parse_args()
     version = args.version
     if version is None:
-        version = 'mappificator-%s-y%s' % (args.parchment_version.split('-')[0], args.yarn_version)
+        version = 'mappificator'
+        if 'parchment' in args.providers:
+            version += '-p%s' % args.parchment_version.split('-')[0]
+        if 'crane' in args.providers:
+            version += '-c%s' % args.crane_version
+        if 'yarn' in args.providers:
+            version += '-y%s' % args.yarn_version
+
+    sources = []
 
     print('Loading blackstone')
     obf_to_moj, method_inheritance = parchmentmc.read_blackstone(args.mc_version)
 
-    print('Loading parchment')
-    parchment = parchmentmc.read_parchment(args.mc_version, args.parchment_version)
+    if 'parchment' in args.providers:
+        print('Loading parchment')
+        parchment = parchmentmc.read_parchment(args.mc_version, args.parchment_version)
+        sources.append(parchment)
 
-    print('Loading crane')
-    crane = architectury.read_crane(args.mc_version, args.crane_version)
+    if 'crane' in args.providers:
+        print('Loading crane')
+        crane = architectury.read_crane(args.mc_version, args.crane_version)
+        sources.append(crane)
 
-    print('Loading intermediary')
-    intermediary = fabricmc.read_intermediary(args.mc_version)
-
-    print('Loading yarn')
-    yarn = fabricmc.read_yarn(args.mc_version, args.yarn_version)
-
-    print('Remapping yarn onto mojmap')
-    moj_to_yarn = remap_yarn_onto_mojmap(obf_to_moj, method_inheritance, intermediary, yarn)
+    if 'yarn' in args.providers:
+        print('Loading intermediary and yarn')
+        intermediary = fabricmc.read_intermediary(args.mc_version)
+        yarn = fabricmc.read_yarn(args.mc_version, args.yarn_version)
+        moj_to_yarn = remap_yarn_onto_mojmap(obf_to_moj, method_inheritance, intermediary, yarn)
+        sources.append(moj_to_yarn)
 
     print('Creating merged mappings')
-
     merged = obf_to_moj.remap()
-    create_merged_mappings(merged, parchment, crane, moj_to_yarn)
+    create_merged_mappings(merged, *sources, improved_lambda_conflict_avoidance=args.improved_lambda_conflict_avoidance)
 
     print('Writing merged mappings')
     parchmentmc.write_parchment(merged, args.mc_version, version)
@@ -78,7 +91,7 @@ def remap_yarn_onto_mojmap(obf_to_moj: Mappings, method_inheritance: MethodInher
     return obf_to_moj.invert().compose(intermediary).compose(yarn)
 
 
-def create_merged_mappings(named: Mappings, *sources: Mappings):
+def create_merged_mappings(named: Mappings, *sources: Mappings, improved_lambda_conflict_avoidance: bool = False):
     # Copy package level docs from parchment
     for key, named_package in named.packages.items():
         for source in sources:
@@ -88,7 +101,7 @@ def create_merged_mappings(named: Mappings, *sources: Mappings):
     add_merged_docs(named.classes, *map(lambda p: p.classes, sources))
     add_merged_docs(named.fields, *map(lambda p: p.fields, sources))
     add_merged_docs(named.methods, *map(lambda p: p.methods, sources))
-    add_merged_params(named, *sources)
+    add_merged_params(named, *sources, improved_lambda_conflict_avoidance=improved_lambda_conflict_avoidance)
 
 
 def add_merged_docs(named: Mapping, *sources: Mapping):
@@ -101,8 +114,7 @@ def add_merged_docs(named: Mapping, *sources: Mapping):
                 named_obj.docs += obj.docs
 
 
-def add_merged_params(named: Mappings, *sources: Mappings):
-    use_enhanced_lambda_conflict_avoidance = False
+def add_merged_params(named: Mappings, *sources: Mappings, improved_lambda_conflict_avoidance: bool = False):
     illegal_names = generate_reserved_class_names(named) | utils.JAVA_KEYWORDS
 
     # The default classes is a map of name -> class
@@ -115,9 +127,6 @@ def add_merged_params(named: Mappings, *sources: Mappings):
             indexed_classes[root_class][1 if target_class.isnumeric() else 0].append(class_name)
         else:  # Include classes that may not have inner or anonymous classes
             _ = indexed_classes[class_name]
-
-    names = ['parchment', 'crane', 'yarn', 'automatic']
-    param_name_stats = [0] * (len(sources) + 1)
 
     # Iterate through indexed classes (top level class source files)
     for class_name, index in indexed_classes.items():
@@ -132,16 +141,16 @@ def add_merged_params(named: Mappings, *sources: Mappings):
         lambda_methods: List[Mappings.Method] = []
         unique_methods: List[Mappings.Method] = []
 
-        if not use_enhanced_lambda_conflict_avoidance:
-            class_methods += lambda_methods
-            lambda_methods = []
-
         # Group all methods into lists of unique and class level conflicts
         add_methods_by_conflict_status(named.classes[class_name], lambda_methods, unique_methods)
         for inner_class_name in inner_class_names:
             add_methods_by_conflict_status(named.classes[inner_class_name], lambda_methods, unique_methods)
         for anon_class_name in anon_class_names:  # Anonymous classes are all class-level conflicts
             add_methods_by_conflict_status(named.classes[anon_class_name], class_methods, class_methods)
+
+        if not improved_lambda_conflict_avoidance:
+            class_methods += lambda_methods
+            lambda_methods = []
 
         reserved_names_by_method: Dict[str, Set[str]] = defaultdict(set)  # reserved names for each method, after it has been assigned
         class_reserved_names: Set[str] = set()
@@ -151,10 +160,9 @@ def add_merged_params(named: Mappings, *sources: Mappings):
             reserved_names: Set[str] = set()
             for named_param in named_method.parameters.values():
                 param_key = (class_name, named_method.name, named_method.desc, named_param.index)
-                mapped_name, i = generate_param_name_from_sources(param_key, named_param, sources, illegal_names, reserved_names)
+                mapped_name = generate_param_name_from_sources(param_key, named_param, sources, illegal_names, reserved_names)
                 reserved_names.add(mapped_name)
                 class_reserved_names.add(mapped_name)
-                param_name_stats[i] += 1
             reserved_names_by_method[named_method.name] |= reserved_names
 
         # Apply parameter names to lambda methods, only conflicting with possible owning methods
@@ -162,21 +170,15 @@ def add_merged_params(named: Mappings, *sources: Mappings):
             reserved_names = reserved_names_by_method[named_method.name]
             for named_param in named_method.parameters.values():
                 param_key = (class_name, named_method.name, named_method.desc, named_param.index)
-                mapped_name, i = generate_param_name_from_sources(param_key, named_param, sources, illegal_names, reserved_names)
+                mapped_name = generate_param_name_from_sources(param_key, named_param, sources, illegal_names, reserved_names)
                 class_reserved_names.add(mapped_name)
-                param_name_stats[i] += 1
 
         # Apply parameter names to lambda and anonymous class methods, using the class reserved names to avoid conflicts
         for named_method in sorted(class_methods, key=lambda k: (k.name, k.desc)):
             for named_param in named_method.parameters.values():
                 param_key = (class_name, named_method.name, named_method.desc, named_param.index)
-                mapped_name, i = generate_param_name_from_sources(param_key, named_param, sources, illegal_names, class_reserved_names)
+                mapped_name = generate_param_name_from_sources(param_key, named_param, sources, illegal_names, class_reserved_names)
                 class_reserved_names.add(mapped_name)
-                param_name_stats[i] += 1
-
-    print('Parameters sourced from:')
-    for k, v in zip(names, param_name_stats):
-        print('  %s = %d' % (k, v))
 
 
 def generate_reserved_class_names(named: Mappings) -> Set[str]:
@@ -199,17 +201,15 @@ def add_methods_by_conflict_status(named_class: Mappings.Class, lambda_methods: 
             simple_methods.append(named_method)
 
 
-def generate_param_name_from_sources(param_key: Tuple[str, str, str, int], named_param: Mappings.Parameter, sources: Tuple[Mappings], illegal_names: Set[str], reserved_names: Set[str]) -> Tuple[str, int]:
+def generate_param_name_from_sources(param_key: Tuple[str, str, str, int], named_param: Mappings.Parameter, sources: Tuple[Mappings], illegal_names: Set[str], reserved_names: Set[str]) -> str:
     mapped_name = None
 
     # Apply mappings and docs from providers
-    mapped_source = -1
     for i, source in enumerate(sources):
         if param_key in source.parameters:
             source_param = source.parameters[param_key]
             if mapped_name is None and source_param.mapped is not None:
                 mapped_name = source_param.mapped
-                mapped_source = i
             if source_param.docs:
                 if named_param.docs:
                     named_param.docs.append('')
@@ -225,7 +225,7 @@ def generate_param_name_from_sources(param_key: Tuple[str, str, str, int], named
 
     mapped_name = resolve_name_conflicts(mapped_name, reserved_names)
     named_param.mapped = mapped_name
-    return mapped_name, mapped_source
+    return mapped_name
 
 
 def generate_param_name(param_type: str) -> str:

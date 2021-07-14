@@ -22,7 +22,7 @@ def read_parchment(mc_version: str, parchment_version: str) -> Mappings:
     return named
 
 
-def write_parchment(data: Mappings, mc_version: str, version: str):
+def write_parchment(data: Mappings, mc_version: str, version: str, write_plain: bool = False):
     """
     Writes a parchment mappings object to a parchment formatted JSON file
     The source set is assumed to be mojmap, with named parameters and javadocs
@@ -30,7 +30,7 @@ def write_parchment(data: Mappings, mc_version: str, version: str):
     # Write directly to a zip file
     file_path = os.path.join(mapping_downloader.CACHE_PATH, 'parchment-%s-%s.zip' % (mc_version, version))
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
-    json_data = {
+    json_data = utils.filter_none({
         'version': '1.0.0',
         'packages': [{
             'name': p.name,
@@ -51,14 +51,18 @@ def write_parchment(data: Mappings, mc_version: str, version: str):
                 'parameters': [{
                     'index': p.index,
                     'name': p.mapped,
-                    'javadoc': '\n'.join(p.docs)
+                    'javadoc': '\n'.join(p.docs) if p.docs else None
                 } for p in m.parameters.values() if p.mapped or p.docs]
             } for m in c.methods.values() if m.docs or any(p.mapped or p.docs for p in m.parameters.values())]
         } for c in data.classes.values()]
-    }
+    })
 
     with zipfile.ZipFile(file_path, 'w') as f:
         f.writestr('parchment.json', json.dumps(json_data))
+
+    if write_plain:
+        plain_path = os.path.join(mapping_downloader.CACHE_PATH, 'parchment-%s-%s.json' % (mc_version, version))
+        mapping_downloader.save_text(plain_path, json.dumps(json_data, indent=2))
 
 
 def publish_parchment(mc_version: str, version: str):
