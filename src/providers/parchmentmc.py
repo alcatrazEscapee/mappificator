@@ -28,7 +28,7 @@ def write_parchment(data: Mappings, mc_version: str, version: str, write_plain: 
     The source set is assumed to be mojmap, with named parameters and javadocs
     """
     # Write directly to a zip file
-    file_path = os.path.join(mapping_downloader.CACHE_PATH, 'parchment-%s-%s.zip' % (mc_version, version))
+    file_path = os.path.join(mapping_downloader.CACHE_PATH, 'parchment-%s-%s-checked.zip' % (mc_version, version))
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     json_data = utils.filter_none({
         'version': '1.0.0',
@@ -61,7 +61,7 @@ def write_parchment(data: Mappings, mc_version: str, version: str, write_plain: 
         f.writestr('parchment.json', json.dumps(json_data))
 
     if write_plain:
-        plain_path = os.path.join(mapping_downloader.CACHE_PATH, 'parchment-%s-%s.json' % (mc_version, version))
+        plain_path = os.path.join(mapping_downloader.CACHE_PATH, 'parchment-%s-%s-checked.json' % (mc_version, version))
         mapping_downloader.save_text(plain_path, json.dumps(json_data, indent=2))
 
 
@@ -71,7 +71,7 @@ def publish_parchment(mc_version: str, version: str):
         raise ValueError('Must first build export before publishing to maven local')
 
     print('Publishing export to maven local...')
-    proc = subprocess.Popen('mvn install:install-file -Dfile=%s -DgroupId=org.parchmentmc.data -DartifactId=parchment-%s -Dversion=%s -Dpackaging=zip' % (file_path, mc_version, version), shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    proc = subprocess.Popen('mvn install:install-file -Dfile=%s -DgroupId=org.parchmentmc.data -DartifactId=parchment-%s -Dversion=%s -Dpackaging=zip -Dclassifier=checked' % (file_path, mc_version, version), shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     while proc.poll() is None:
         output = proc.stdout.readline().decode('utf-8').replace('\r', '').replace('\n', '')
         if output != '':
