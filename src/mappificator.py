@@ -22,6 +22,7 @@ def main():
     parser.add_argument('--providers', nargs='+', choices=('parchment', 'crane', 'yarn'), default=('parchment', 'crane', 'yarn'), help='Providers to source mappings from.')
     parser.add_argument('--improved-lambda-conflict-avoidance', action='store_true', dest='improved_lambda_conflict_avoidance', default=False, help='Enables an enhanced method for avoiding lambda parameter conflicts, by grouping lambda parameters local to their owning method(s) as determined by the official name of the lambda in source.')
     parser.add_argument('--yarn-mapping-comments', action='store_true', default=False, dest='yarn_mapping_comments', help='Enables adding javadoc comments to classes, fields, and methods with their corresponding yarn name, if present.')
+    parser.add_argument('--pretty-print-merged-mappings', action='store_true', dest='pretty_print_merged_mappings', help='Pretty prints (with indents and newlines) a raw JSON of the merged mappings in addition to the compressed format.')
 
     # Individual versions
     parser.add_argument('--mc-version', type=str, default='1.17', help='The Minecraft version')
@@ -69,7 +70,7 @@ def main():
     create_merged_mappings(merged, *sources, improved_lambda_conflict_avoidance=args.improved_lambda_conflict_avoidance)
 
     print('Writing merged mappings')
-    parchmentmc.write_parchment(merged, args.mc_version, version, True)
+    parchmentmc.write_parchment(merged, args.mc_version, version, args.pretty_print_merged_mappings)
 
     if args.publish:
         print('Publishing to maven local')
@@ -219,10 +220,10 @@ def generate_param_name_from_sources(param_key: Tuple[str, str, str, int], named
                     named_param.docs.append('')
                 named_param.docs += source_param.docs
 
-    # Apply default naming
-    if mapped_name is None:
+    if mapped_name is None:  # generate a default name
         mapped_name = generate_param_name(named_param.desc)
 
+    mapped_name += '_'  # conflict resolution with fields and/or local variables
     mapped_name = resolve_name_conflicts(mapped_name, reserved_names)
 
     named_param.mapped = mapped_name
@@ -243,15 +244,12 @@ def generate_param_name(param_type: str) -> str:
 
 
 def resolve_name_conflicts(name: str, reserved_names: Set[str]) -> str:
-    proto_name = name.rstrip('0123456789')  # strip any previous numeric value off the end
-    count = 1
-    while name in reserved_names:
-        name = proto_name + str(count)
-        count += 1
-
-    # Apply an '_' suffix only if we can determine it's necessary.
-    if not any(c.isupper() for c in name):
-        name += '_'
+    if name in reserved_names:
+        proto_name = name[:-1].rstrip('0123456789')  # strip any previous numeric value off the end
+        count = 1
+        while name in reserved_names:
+            name = proto_name + str(count) + '_'
+            count += 1
     return name
 
 

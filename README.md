@@ -2,8 +2,7 @@
 
 This is a pile of bodging scripts for playing around with Minecraft modding mappings, including working with Fabric Yarn, Intermediary, Official, and Parchment mappings. The primary purpose is to create an alternate mapping set for Forge mod development. This exists as an alternative to default Parchment mappings for several reasons:
 
-- Parchment mappings (for good reason) include a `p` prefix on every parameter to prevent local variable conflicts. Mappificator does not apply this in every case as it's not necessary, and uses a more targeted automatic system to resolve conflicts. It also uses an `_` suffix instead, based on personal preference.
-- Parchment does not include mappings for lambda methods or anonymous classes, again due to conflict resolution issues. Mappificator does.
+- Parchment does not include mappings for lambda methods or anonymous classes due to conflict resolution issues. Mappificator does, and uses a number of techniques to avoid conflicts between parameter names (see the `--improved-lambda-conflict-avoidance` argument).
 - Mappificator sources parameters names from multiple projects, including Parchment, Crane, and also Fabric Yarn.
 - Missing parameter mappings are auto named based on their type for extra readability (e.g. `BlockPos p_28739483` maps to `BlockPos blockPos_`)
 - Mappificator adds cross-referencing comments from Yarn, populating methods, fields, and classes with comments identifying their respective Yarn name, if it exists.
