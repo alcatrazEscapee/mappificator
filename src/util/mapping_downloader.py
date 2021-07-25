@@ -168,7 +168,7 @@ def is_cached(file_path: str) -> bool:
 def load_text(file_path: str) -> str:
     path = os.path.join(CACHE_PATH, file_path)
     try:
-        with open(path, 'r') as f:
+        with open(path, 'r', encoding='utf-8') as f:
             text = f.read()
         return text
     except OSError as e:
@@ -178,7 +178,7 @@ def load_text(file_path: str) -> str:
 def save_text(file_path: str, text: str):
     path = os.path.join(CACHE_PATH, file_path)
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, 'w') as f:
+    with open(path, 'w', encoding='utf-8') as f:
         f.write(text)
 
 
@@ -192,9 +192,9 @@ def download(url: str) -> Any:
 
 
 def as_text(raw: Any) -> str:
-    if not isinstance(raw, str):
+    if isinstance(raw, bytes):
         raw = raw.decode('utf-8')
-    return raw.replace('\r\n', '\n').replace('\u200c', '')
+    return raw.replace('\r\n', '\n')
 
 
 def extract_from_zip(raw: Any, *files: str) -> Tuple[str, ...]:
