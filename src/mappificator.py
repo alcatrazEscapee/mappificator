@@ -25,10 +25,10 @@ def main():
     parser.add_argument('--pretty-print-merged-mappings', action='store_true', dest='pretty_print_merged_mappings', help='Pretty prints (with indents and newlines) a raw JSON of the merged mappings in addition to the compressed format.')
 
     # Individual versions
-    parser.add_argument('--mc-version', type=str, default='1.17', help='The Minecraft version')
-    parser.add_argument('--parchment-version', type=str, default='2021.07.21', help='The parchment mappings version')
-    parser.add_argument('--yarn-version', type=str, default='9', help='The fabric yarn mappings version')
-    parser.add_argument('--crane-version', type=str, default='14', help='The architectury crane mappings version')
+    parser.add_argument('--mc-version', type=str, default='1.17.1', help='The Minecraft version')
+    parser.add_argument('--parchment-version', type=str, default='2021.07.27', help='The parchment mappings version')
+    parser.add_argument('--yarn-version', type=str, default='30', help='The fabric yarn mappings version')
+    parser.add_argument('--crane-version', type=str, default='15', help='The architectury crane mappings version')
 
     args = parser.parse_args()
     version = args.version

@@ -1,5 +1,6 @@
 # A parser to handle .tiny files, used by both Fabric projects (Yarn, Intermediary) and Crane
 
+import re
 from typing import Any
 
 from util.mappings import Mappings
@@ -47,8 +48,7 @@ def parse_tiny_v2(parser: Parser) -> Mappings:
         elif parser.try_scan('\tc\t'):
             if named_class is None:
                 parser.error('Expected class before class comment')
-            doc = parser.scan_until('\n', include_end=False)
-            named_class.docs += doc.encode('utf-8').decode('unicode_escape').split('\\n')
+            parse_tiny_v2_comment(parser, named_class)
         elif parser.try_scan('\t\tc\t'):
             if named_member is None:
                 parser.error('Expected method or field before member comment')
@@ -131,6 +131,13 @@ def parse_tiny_v2_parameter(parser: Parser, mappings: Mappings, named_class: Map
 
 
 def parse_tiny_v2_comment(parser: Parser, member: Any):
+    # Yarn's stance on newlines:
+    # '\n' indicates a space
+    # '\n\n' indicates a newline
+    # '<p>' indicates a new paragraph (empty line)
+    # Source: https://github.com/FabricMC/yarn/blob/1.17.1/CONVENTIONS.md
     doc = parser.scan_until('\n', include_end=False)
-    doc = doc.encode('utf-8').decode('unicode_escape')
-    member.docs += doc.strip().split('\n')
+    doc = doc.encode('utf-8').decode('unicode_escape')  # convert raw \n sequences into actual newlines
+    doc = doc.replace('\n\n', '<p>').replace('\n', ' ').replace('<p>', '\n')  # convert all tokens correctly
+    doc = re.sub('\n+', '\n', doc)  # reduce unnecessary extra newlines
+    member.docs += doc.split('\n')
