@@ -8,7 +8,6 @@ import subprocess
 import zipfile
 from typing import Dict, Tuple, Any, Set
 
-import util.utils
 from util import mapping_downloader, utils
 from util.mappings import Mappings
 
@@ -190,7 +189,7 @@ def parse_blackstone_class(b_class: Dict[str, Any], obf_to_moj: Mappings, method
         moj_method = b_method['name']['moj']
         moj_desc = b_method['descriptor']['moj']
 
-        _, param_types = util.utils.split_method_descriptor(moj_desc)
+        _, param_types = utils.split_method_descriptor(moj_desc)
 
         named_method = obf_to_moj.add_method(named_class, obf_method, obf_desc)
         obf_to_moj.add_parameters_from_method(named_class, named_method, (access_flags & utils.ACC_STATIC) != 0)
