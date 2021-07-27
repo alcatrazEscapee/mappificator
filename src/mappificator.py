@@ -107,7 +107,7 @@ def append_mapping_javadoc(mappings: Mappings, prefix: str):
 
     apply(mappings.classes)
     apply(mappings.fields)
-    apply(mappings.methods)
+    apply(dict((k, v) for k, v in mappings.methods.items() if v.mapped != '<init>' and not v.is_lambda))  # exclude constructors and lambda methods
 
 
 def create_merged_mappings(named: Mappings, *sources: Mappings, improved_lambda_conflict_avoidance: bool = False):
