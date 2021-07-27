@@ -1,4 +1,4 @@
-from typing import Dict, Tuple, Optional, List
+from typing import Dict, Tuple, Optional, List, Protocol
 
 from util import utils
 
@@ -297,3 +297,8 @@ class Mappings:
         method_key = clazz.name, method.name, method.desc
         if method_key not in self.methods or self.methods[method_key] != method:
             raise ValueError('Method %s is not owned by mappings')
+
+
+class Mappable(Protocol):
+    mapped: Optional[str]
+    docs: List[str]

@@ -2,12 +2,12 @@
 
 from argparse import ArgumentParser
 from collections import defaultdict
-from typing import Dict, Tuple, List, Set, Mapping, Optional
+from typing import Dict, Tuple, List, Set, Optional, Any
 
 from providers import fabricmc, parchmentmc, architectury
 from providers.parchmentmc import MethodInheritanceTree
 from util import utils
-from util.mappings import Mappings
+from util.mappings import Mappings, Mappable
 
 
 def main():
@@ -123,7 +123,7 @@ def create_merged_mappings(named: Mappings, *sources: Mappings, improved_lambda_
     add_merged_params(named, *sources, improved_lambda_conflict_avoidance=improved_lambda_conflict_avoidance)
 
 
-def add_merged_docs(named: Mapping, *sources: Mapping):
+def add_merged_docs(named: Dict[Any, Mappable], *sources: Dict[Any, Mappable]):
     for key, named_obj in named.items():
         for source in sources:
             if key in source:

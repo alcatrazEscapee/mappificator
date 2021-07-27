@@ -1,9 +1,8 @@
 # A parser to handle .tiny files, used by both Fabric projects (Yarn, Intermediary) and Crane
 
 import re
-from typing import Any
 
-from util.mappings import Mappings
+from util.mappings import Mappings, Mappable
 from util.parser import Parser
 
 
@@ -130,7 +129,7 @@ def parse_tiny_v2_parameter(parser: Parser, mappings: Mappings, named_class: Map
     return named_parameter
 
 
-def parse_tiny_v2_comment(parser: Parser, member: Any):
+def parse_tiny_v2_comment(parser: Parser, member: Mappable):
     # Yarn's stance on newlines:
     # '\n' indicates a space
     # '\n\n' indicates a newline
