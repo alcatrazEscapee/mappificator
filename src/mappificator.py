@@ -146,7 +146,7 @@ def add_merged_params(named: Mappings, *sources: Mappings, improved_lambda_confl
             _ = indexed_classes[class_name]
 
     # Iterate through indexed classes (top level class source files)
-    for class_name, index in indexed_classes.items():
+    for class_name_key, index in indexed_classes.items():
         inner_class_names, anon_class_names = index
 
         # We need to group methods by their conflict resolution state - essentially, group methods that may conflict with other methods
@@ -154,12 +154,13 @@ def add_merged_params(named: Mappings, *sources: Mappings, improved_lambda_confl
         # Each top level method is added to a 'reserved group' just based on the method name, not descriptor
         # Lambda methods are next: By inspecting the obf. name, we can infer the source method by name. These parameters are then named against those reserved names
         # Methods belonging to anonymous classes are named last, and may conflict with any existing parameter as the location of the anonymous class it not known.
-        class_methods: List[Mappings.Method] = []
-        lambda_methods: List[Mappings.Method] = []
-        unique_methods: List[Mappings.Method] = []
+        # Methods are also grouped with their owning class, as the class_name_key is only the root class (not including anonymous or inner classes) and as such, is necessary to extract mappings from external sources for those methods.
+        class_methods: List[Tuple[str, Mappings.Method]] = []
+        lambda_methods: List[Tuple[str, Mappings.Method]] = []
+        unique_methods: List[Tuple[str, Mappings.Method]] = []
 
         # Group all methods into lists of unique and class level conflicts
-        add_methods_by_conflict_status(named.classes[class_name], lambda_methods, unique_methods)
+        add_methods_by_conflict_status(named.classes[class_name_key], lambda_methods, unique_methods)
         for inner_class_name in inner_class_names:
             add_methods_by_conflict_status(named.classes[inner_class_name], lambda_methods, unique_methods)
         for anon_class_name in anon_class_names:  # Anonymous classes are all class-level conflicts
@@ -173,7 +174,7 @@ def add_merged_params(named: Mappings, *sources: Mappings, improved_lambda_confl
         class_reserved_names: Set[str] = set()
 
         # Apply parameter names to all methods, including copying docs and generating any missing parameters procedurally
-        for named_method in sorted(unique_methods, key=lambda k: (k.name, k.desc)):
+        for class_name, named_method in sorted(unique_methods, key=index_sort):
             reserved_names: Set[str] = set()
             for named_param in named_method.parameters.values():
                 param_key = (class_name, named_method.name, named_method.desc, named_param.index)
@@ -183,7 +184,7 @@ def add_merged_params(named: Mappings, *sources: Mappings, improved_lambda_confl
             reserved_names_by_method[named_method.name] |= reserved_names
 
         # Apply parameter names to lambda methods, only conflicting with possible owning methods
-        for named_method in sorted(lambda_methods, key=lambda k: (k.name, k.desc)):
+        for class_name, named_method in sorted(lambda_methods, key=index_sort):
             reserved_names = reserved_names_by_method[named_method.name]
             for named_param in named_method.parameters.values():
                 param_key = (class_name, named_method.name, named_method.desc, named_param.index)
@@ -191,19 +192,19 @@ def add_merged_params(named: Mappings, *sources: Mappings, improved_lambda_confl
                 class_reserved_names.add(mapped_name)
 
         # Apply parameter names to lambda and anonymous class methods, using the class reserved names to avoid conflicts
-        for named_method in sorted(class_methods, key=lambda k: (k.name, k.desc)):
+        for class_name, named_method in sorted(class_methods, key=index_sort):
             for named_param in named_method.parameters.values():
                 param_key = (class_name, named_method.name, named_method.desc, named_param.index)
                 mapped_name = generate_param_name_from_sources(param_key, named_param, sources, class_reserved_names)
                 class_reserved_names.add(mapped_name)
 
 
-def add_methods_by_conflict_status(named_class: Mappings.Class, lambda_methods: Optional[List[Mappings.Method]], simple_methods: Optional[List[Mappings.Method]]):
+def add_methods_by_conflict_status(named_class: Mappings.Class, lambda_methods: Optional[List[Tuple[str, Mappings.Method]]], simple_methods: Optional[List[Tuple[str, Mappings.Method]]]):
     for method_key, named_method in named_class.methods.items():
         if named_method.is_lambda:
-            lambda_methods.append(named_method)
+            lambda_methods.append((named_class.name, named_method))
         else:
-            simple_methods.append(named_method)
+            simple_methods.append((named_class.name, named_method))
 
 
 def generate_param_name_from_sources(param_key: Tuple[str, str, str, int], named_param: Mappings.Parameter, sources: Tuple[Mappings], reserved_names: Set[str]) -> str:
@@ -251,6 +252,10 @@ def resolve_name_conflicts(name: str, reserved_names: Set[str]) -> str:
             name = proto_name + str(count) + '_'
             count += 1
     return name
+
+
+def index_sort(key: Tuple[str, Mappings.Method]) -> Tuple[str, ...]:
+    return key[0], key[1].name, key[1].desc
 
 
 if __name__ == '__main__':

@@ -210,7 +210,7 @@ class Mappings:
 
                         for param in method.parameters.values():
                             mapped_parameter = mappings.add_parameter(mapped_class, mapped_method, param.index)
-                            mapped_parameter.desc = utils.or_else(class_mappings, param.desc, param.desc)
+                            mapped_parameter.desc = utils.remap_descriptor(param.desc, class_mappings)
 
         return mappings
 
