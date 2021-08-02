@@ -15,7 +15,10 @@ You must install [Maven](https://maven.apache.org/). (Python will invoke `mvn` v
 
 - To check if Maven is functional, run `mvn --version` in a console window.
 
-Run `mappificator.py` with the working directory `/<Mappificator Project Folder>/src/`. There are a number of command line options that can be used and can be found with `mappificator.py --help`.
+Run `mappificator.py` with the working directory `/<Mappificator Project Folder>/src/`. There are a number of command line options that can be used and can be found with `mappificator.py --help`. In general, there are two that are of note:
+
+- `-p --publish` is required to publish the mappings to the user's maven local.
+- `-v --version` sets the output version. 
 
 Mappificator produces a parchment formatted mapping export. As of time of writing, the only way to use this is to use a custom ForgeGradle 5 fork. There are instructions on how to set this up in the [Parchment Discord](https://discord.com/invite/XXHhhPRUxs).
 

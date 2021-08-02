@@ -1,5 +1,4 @@
 from unittest import TestCase
-
 from util import utils
 
 
@@ -15,7 +14,7 @@ class UtilsTests(TestCase):
         self.assertEqual(utils.convert_descriptor_to_type('I'), ('int', 0))
         self.assertEqual(utils.convert_descriptor_to_type('[[Z'), ('boolean', 2))
         self.assertEqual(utils.convert_descriptor_to_type('Ljava/util/String;'), ('java/util/String', 0))
-        self.assertEqual(utils.convert_descriptor_to_type('[Lpackage/Class'), ('package/Class', 1))
+        self.assertEqual(utils.convert_descriptor_to_type('[Lpackage/Class;'), ('package/Class', 1))
 
     def test_remap_descriptor(self):
         remap = {'a': 'ClassA', 'b': 'simple/ClassB', 'c': 'easy/ClassC'}

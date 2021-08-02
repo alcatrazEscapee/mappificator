@@ -8,7 +8,7 @@ import urllib.error
 import urllib.request
 import zipfile
 
-from typing import Tuple, Optional, Any, Dict
+from typing import Tuple, Optional, Any, Dict, AnyStr
 
 FABRIC_YARN_URL = 'https://maven.fabricmc.net/net/fabricmc/yarn/{mc_version}+build.{yarn_version}/yarn-{mc_version}+build.{yarn_version}-v2.jar'
 FABRIC_INTERMEDIARY_URL = 'https://raw.githubusercontent.com/FabricMC/intermediary/master/mappings/{mc_version}.tiny'
@@ -191,13 +191,13 @@ def download(url: str) -> Any:
         raise Exception('Requested %s' % url) from e
 
 
-def as_text(raw: Any) -> str:
+def as_text(raw: AnyStr) -> str:
     if isinstance(raw, bytes):
         raw = raw.decode('utf-8')
     return raw.replace('\r\n', '\n')
 
 
-def extract_from_zip(raw: Any, *files: str) -> Tuple[str, ...]:
+def extract_from_zip(raw: bytes, *files: str) -> Tuple[str, ...]:
     results = []
     try:
         with io.BytesIO(raw) as fio:

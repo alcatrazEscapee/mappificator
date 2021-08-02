@@ -35,13 +35,13 @@ def convert_type_to_descriptor(name: str) -> str:
     """
     parser = Parser(name)
     for key, desc in JAVA_TYPE_TO_DESCRIPTOR.items():
-        if parser.try_scan(key):
+        if parser.accept(key):
             break
     else:
-        desc = 'L%s;' % parser.scan_identifier(Parser.IDENTIFIER - set('[]'))
+        desc = 'L%s;' % parser.accept_from(Parser.IDENTIFIER - set('[]'))
 
     arrays = 0
-    while parser.try_scan('[]'):
+    while parser.accept('[]'):
         arrays += 1
     return '[' * arrays + desc
 
@@ -53,30 +53,31 @@ def convert_descriptor_to_type(desc: str) -> Tuple[str, int]:
     """
     parser = Parser(desc)
     arrays = 0
-    while parser.try_scan('['):
+    while parser.accept('['):
         arrays += 1
-    key = parser.next()
+    key = parser.peek()
     if key in JAVA_DESCRIPTOR_TO_TYPE:
         return JAVA_DESCRIPTOR_TO_TYPE[key], arrays
     else:
-        parser.scan('L')
-        name = parser.scan_until(';', False)
+        parser.expect('L')
+        name = parser.accept_until(';')
         return name, arrays
 
 
 def remap_descriptor(desc: str, remap: Dict[str, str]) -> str:
     parser = Parser(desc)
     arrays = 0
-    while parser.next() == '[':
-        parser.scan('[')
+    while parser.peek() == '[':
+        parser.expect('[')
         arrays += 1
     arrays = '[' * arrays
-    key = parser.next()
+    key = parser.peek()
     if key in JAVA_DESCRIPTOR_TO_TYPE:
+        parser.pointer += 1
         return arrays + key
     else:
-        parser.scan('L')
-        cls = parser.scan_until(';', False)
+        parser.expect('L')
+        cls = parser.accept_until(';')
         cls = or_else(remap, cls, cls)
         return arrays + 'L%s;' % cls
 
@@ -94,12 +95,8 @@ def split_method_descriptor(desc: str) -> Tuple[str, List[str]]:
     Returns the return type, and a list of the parameter types
     """
     parser = Parser(desc)
-    parser.scan('(')
-    params = []
-    while parser.next() != ')':
-        params.append(parser.scan_type())
-    parser.scan(')')
-    ret_type = parser.scan_type()
+    ret_type, params, _ = parser.accept_method_descriptor()
+    parser.finish()
     return ret_type, params
 
 
