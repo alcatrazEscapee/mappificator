@@ -182,8 +182,9 @@ def parse_blackstone_class(b_class: Dict[str, Any], obf_to_moj: Mappings, method
             assert access_flags == 0
             access_flags = missing_methods[key]['security']
 
-        # Skip synthetic methods, there is no point mapping their parameters
-        if (access_flags & utils.ACC_SYNTHETIC) != 0:
+        # Skip synthetic methods, there is no point mapping their parameters. Include methods marked as lambdas.
+        # The blackstone 'lambda' param is a heuristic, so we include them by default. There may be both synthetic and non-synthetic lambdas.
+        if (access_flags & utils.ACC_SYNTHETIC) != 0 and not b_method['lambda']:
             continue
 
         moj_method = b_method['name']['moj']
