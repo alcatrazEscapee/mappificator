@@ -205,6 +205,7 @@ class Mappings:
                 for method in clazz.methods.values():
                     if method.mapped:
                         mapped_method = mappings.add_method(mapped_class, method.mapped, utils.remap_method_descriptor(method.desc, class_mappings))
+                        mapped_method.is_lambda = method.is_lambda  # persist lambda status
                         if invert_namespaces:
                             mapped_method.mapped = method.name
 
@@ -260,6 +261,7 @@ class Mappings:
                             mapped_method = mappings.add_method(mapped_class, method.name, method.desc)
                             mapped_method.mapped = other_method.mapped
                             mapped_method.docs += other_method.docs
+                            mapped_method.is_lambda = method.is_lambda  # persist lambda status from source mappings
 
                             for other_param in other_method.parameters.values():
                                 mapped_param = mappings.add_parameter(mapped_class, mapped_method, other_param.index)

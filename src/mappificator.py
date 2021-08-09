@@ -1,5 +1,6 @@
 # This is why we can't have nice things
 
+import re
 from argparse import ArgumentParser
 from collections import defaultdict
 from typing import Dict, Tuple, List, Set, Optional, Any
@@ -8,6 +9,8 @@ from providers import fabricmc, parchmentmc, architectury
 from providers.parchmentmc import MethodInheritanceTree
 from util import utils
 from util.mappings import Mappings, Mappable
+
+LAMBDA_PATTERN: re.Pattern = re.compile(r'^lambda$(\w+)$\d+$')
 
 
 def main():
@@ -20,9 +23,7 @@ def main():
 
     # Options
     parser.add_argument('--providers', nargs='+', choices=('parchment', 'crane', 'yarn'), default=('parchment', 'crane', 'yarn'), help='Providers to source mappings from.')
-    parser.add_argument('--improved-lambda-conflict-avoidance', action='store_true', dest='improved_lambda_conflict_avoidance', default=False, help='Enables an enhanced method for avoiding lambda parameter conflicts, by grouping lambda parameters local to their owning method(s) as determined by the official name of the lambda in source.')
     parser.add_argument('--yarn-mapping-comments', action='store_true', default=False, dest='yarn_mapping_comments', help='Enables adding javadoc comments to classes, fields, and methods with their corresponding yarn name, if present.')
-    parser.add_argument('--pretty-print-merged-mappings', action='store_true', dest='pretty_print_merged_mappings', help='Pretty prints (with indents and newlines) a raw JSON of the merged mappings in addition to the compressed format.')
 
     # Individual versions
     parser.add_argument('--mc-version', type=str, default='1.17.1', help='The Minecraft version')
@@ -67,10 +68,10 @@ def main():
 
     print('Creating merged mappings')
     merged = obf_to_moj.remap()
-    create_merged_mappings(merged, *sources, improved_lambda_conflict_avoidance=args.improved_lambda_conflict_avoidance)
+    create_merged_mappings(merged, *sources)
 
     print('Writing merged mappings')
-    parchmentmc.write_parchment(merged, args.mc_version, version, args.pretty_print_merged_mappings)
+    parchmentmc.write_parchment(merged, args.mc_version, version, True)
 
     if args.publish:
         print('Publishing to maven local')
@@ -110,7 +111,7 @@ def append_mapping_javadoc(mappings: Mappings, prefix: str):
     apply(dict((k, v) for k, v in mappings.methods.items() if v.mapped != '<init>' and not v.is_lambda))  # exclude constructors and lambda methods
 
 
-def create_merged_mappings(named: Mappings, *sources: Mappings, improved_lambda_conflict_avoidance: bool = False):
+def create_merged_mappings(named: Mappings, *sources: Mappings):
     # Copy package level docs from parchment
     for key, named_package in named.packages.items():
         for source in sources:
@@ -120,7 +121,7 @@ def create_merged_mappings(named: Mappings, *sources: Mappings, improved_lambda_
     add_merged_docs(named.classes, *map(lambda p: p.classes, sources))
     add_merged_docs(named.fields, *map(lambda p: p.fields, sources))
     add_merged_docs(named.methods, *map(lambda p: p.methods, sources))
-    add_merged_params(named, *sources, improved_lambda_conflict_avoidance=improved_lambda_conflict_avoidance)
+    add_merged_params(named, *sources)
 
 
 def add_merged_docs(named: Dict[Any, Mappable], *sources: Dict[Any, Mappable]):
@@ -133,7 +134,7 @@ def add_merged_docs(named: Dict[Any, Mappable], *sources: Dict[Any, Mappable]):
                 named_obj.docs += obj.docs
 
 
-def add_merged_params(named: Mappings, *sources: Mappings, improved_lambda_conflict_avoidance: bool = False):
+def add_merged_params(named: Mappings, *sources: Mappings):
     # The default classes is a map of name -> class
     # We need to index it into a map of name -> (class, any inner classes, any anonymous classes)
     # Both of these are inferred by the class name
@@ -160,15 +161,11 @@ def add_merged_params(named: Mappings, *sources: Mappings, improved_lambda_confl
         unique_methods: List[Tuple[str, Mappings.Method]] = []
 
         # Group all methods into lists of unique and class level conflicts
-        add_methods_by_conflict_status(named.classes[class_name_key], lambda_methods, unique_methods)
+        add_methods_by_conflict_status(named.classes[class_name_key], class_methods, lambda_methods, unique_methods)
         for inner_class_name in inner_class_names:
-            add_methods_by_conflict_status(named.classes[inner_class_name], lambda_methods, unique_methods)
+            add_methods_by_conflict_status(named.classes[inner_class_name], class_methods, lambda_methods, unique_methods)
         for anon_class_name in anon_class_names:  # Anonymous classes are all class-level conflicts
-            add_methods_by_conflict_status(named.classes[anon_class_name], class_methods, class_methods)
-
-        if not improved_lambda_conflict_avoidance:
-            class_methods += lambda_methods
-            lambda_methods = []
+            add_methods_by_conflict_status(named.classes[anon_class_name], class_methods, class_methods, class_methods)
 
         reserved_names_by_method: Dict[str, Set[str]] = defaultdict(set)  # reserved names for each method, after it has been assigned
         class_reserved_names: Set[str] = set()
@@ -185,7 +182,10 @@ def add_merged_params(named: Mappings, *sources: Mappings, improved_lambda_confl
 
         # Apply parameter names to lambda methods, only conflicting with possible owning methods
         for class_name, named_method in sorted(lambda_methods, key=index_sort):
-            reserved_names = reserved_names_by_method[named_method.name]
+            match = re.match(LAMBDA_PATTERN, named_method.name)
+            assert match is not None
+            lambda_owner_method_name = match.group(1)
+            reserved_names = reserved_names_by_method[lambda_owner_method_name]
             for named_param in named_method.parameters.values():
                 param_key = (class_name, named_method.name, named_method.desc, named_param.index)
                 mapped_name = generate_param_name_from_sources(param_key, named_param, sources, reserved_names)
@@ -199,12 +199,16 @@ def add_merged_params(named: Mappings, *sources: Mappings, improved_lambda_confl
                 class_reserved_names.add(mapped_name)
 
 
-def add_methods_by_conflict_status(named_class: Mappings.Class, lambda_methods: Optional[List[Tuple[str, Mappings.Method]]], simple_methods: Optional[List[Tuple[str, Mappings.Method]]]):
+def add_methods_by_conflict_status(named_class: Mappings.Class, class_methods: List[Tuple[str, Mappings.Method]], lambda_methods: List[Tuple[str, Mappings.Method]], simple_methods: List[Tuple[str, Mappings.Method]]):
     for method_key, named_method in named_class.methods.items():
+        key = named_class.name, named_method
         if named_method.is_lambda:
-            lambda_methods.append((named_class.name, named_method))
+            if re.match(LAMBDA_PATTERN, named_method.name):
+                lambda_methods.append(key)
+            else:
+                class_methods.append(key)
         else:
-            simple_methods.append((named_class.name, named_method))
+            simple_methods.append(key)
 
 
 def generate_param_name_from_sources(param_key: Tuple[str, str, str, int], named_param: Mappings.Parameter, sources: Tuple[Mappings], reserved_names: Set[str]) -> str:
