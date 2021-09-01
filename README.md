@@ -1,13 +1,18 @@
 # Mappificator
 
-This is a pile of bodging scripts for playing around with Minecraft modding mappings, including working with Fabric Yarn, Intermediary, Official, and Parchment mappings. The primary purpose is to create an alternate mapping set for Forge mod development. This exists as an alternative to default Parchment mappings for several reasons:
+This is a pile of bodging scripts for playing around with Minecraft modding mappings, and has become a tool to generate custom mappings for Forge mod development, based on the official (mojmap) mappings. It exists for several reasons:
 
-- Parchment does not include mappings for lambda methods or anonymous classes due to conflict resolution issues. Mappificator does, and uses a number of techniques to avoid conflicts between parameter names.
-- Mappificator can source parameters names from multiple projects, including Parchment, Crane, and also Fabric Yarn.
-- Missing parameter mappings are auto named based on their type for extra readability (e.g. `BlockPos p_28739483` maps to `BlockPos blockPos_`)
-- Mappificator adds cross-referencing comments from Yarn, populating methods, fields, and classes with comments identifying their respective Yarn name, if it exists.
+- Mappificator can merge mappings from several sources.
+- Unnamed parameters can be auto-named based on their type, such as `BlockPos blockPos_` instead of `BlockPos p_1748392_1_`.
+- IF desired, cross referencing comments can be added populating methods with their corresponding name in other mappings, such as MCP or Yarn.
+- Mappificator includes more mappings than other sources, including mappings for lambda methods (not included in Parchment, or historically in MCP), and methods in anonymous classes (not included in Parchment).
 
-All required materials to generate this mapping export are downloaded and cached locally, and the mappings are built and uploaded to the user's local maven repository. This is then able to be referenced by Forge Gradle through using a custom mapping version.
+As mapping projects, technologies, and toolchains have changed a fair amount in recent modding history, notable previous versions are detailed below:
+
+Minecraft Versions | Mapping Export Format | Mappings Sources
+--- | --- | ---
+1.17.x (Latest) | Parchment | Parchment, Crane, Yarn
+[1.16.x](https://github.com/alcatrazEscapee/mappificator/tree/versions/1.16.x) | MCP Snapshot | MCP, Yarn
 
 ### Setup
 
