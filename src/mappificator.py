@@ -22,12 +22,12 @@ def main():
     parser.add_argument('-p', '--publish', action='store_true', dest='publish', default=False, help='Publish the export to the user\'s maven local')
 
     # Options
-    parser.add_argument('--providers', nargs='+', choices=('parchment', 'crane', 'yarn'), default=('parchment', 'crane', 'yarn'), help='Providers to source mappings from.')
+    parser.add_argument('--providers', nargs='+', choices=('parchment', 'crane', 'yarn'), default=('parchment',), help='Providers to source mappings from.')
     parser.add_argument('--yarn-mapping-comments', action='store_true', default=False, dest='yarn_mapping_comments', help='Enables adding javadoc comments to classes, fields, and methods with their corresponding yarn name, if present.')
 
     # Individual versions
     parser.add_argument('--mc-version', type=str, default='1.17.1', help='The Minecraft version')
-    parser.add_argument('--parchment-version', type=str, default='2021.07.27', help='The parchment mappings version')
+    parser.add_argument('--parchment-version', type=str, default='2021.08.29', help='The parchment mappings version')
     parser.add_argument('--yarn-version', type=str, default='30', help='The fabric yarn mappings version')
     parser.add_argument('--crane-version', type=str, default='15', help='The architectury crane mappings version')
 
@@ -57,14 +57,15 @@ def main():
         crane = architectury.read_crane(args.mc_version, args.crane_version)
         sources.append(crane)
 
-    if 'yarn' in args.providers:
+    if 'yarn' in args.providers or args.yarn_mapping_comments:
         print('Loading intermediary and yarn')
         intermediary = fabricmc.read_intermediary(args.mc_version)
         yarn = fabricmc.read_yarn(args.mc_version, args.yarn_version)
         moj_to_yarn = remap_yarn_onto_mojmap(obf_to_moj, method_inheritance, intermediary, yarn)
         if args.yarn_mapping_comments:
             append_mapping_javadoc(moj_to_yarn, 'Yarn: ')
-        sources.append(moj_to_yarn)
+        if 'yarn' in args.providers:
+            sources.append(moj_to_yarn)
 
     print('Creating merged mappings')
     merged = obf_to_moj.remap()
@@ -103,7 +104,7 @@ def append_mapping_javadoc(mappings: Mappings, prefix: str):
         for mapped in obj.values():
             if mapped.mapped:
                 if mapped.docs:
-                    mapped.docs.append('')
+                    mapped.docs.append('<p>')
                 mapped.docs.append(prefix + mapped.mapped)
 
     apply(mappings.classes)
@@ -130,7 +131,7 @@ def add_merged_docs(named: Dict[Any, Mappable], *sources: Dict[Any, Mappable]):
             if key in source:
                 obj = source[key]
                 if named_obj.docs:  # Add a space if this isn't the first entry
-                    named_obj.docs.append('')
+                    named_obj.docs.append('<p>')
                 named_obj.docs += obj.docs
 
 

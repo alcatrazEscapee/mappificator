@@ -162,33 +162,23 @@ def parse_blackstone_class(b_class: Dict[str, Any], obf_to_moj: Mappings, method
 
     # Methods
     b_methods = utils.or_else(b_class, 'methods', [])
-    primary_methods = {}
-    missing_methods = {}
     for b_method in b_methods:
         b_name = b_method['name']
-        key = b_name['obf'], b_method['descriptor']['obf']
-        if 'moj' in b_name:
-            # Normal method
-            primary_methods[key] = b_method
-        else:
-            missing_methods[key] = b_method
-
-    # Iterate methods again, now with the ability to match primary -> missing to restore access flags
-    for key, b_method in primary_methods.items():
-        obf_method, obf_desc = key
+        b_desc = b_method['descriptor']
+        obf_method = b_name['obf']
+        obf_desc = b_desc['obf']
 
         access_flags = b_method['security']
-        if key in missing_methods:
-            assert access_flags == 0
-            access_flags = missing_methods[key]['security']
 
         # Skip synthetic methods, there is no point mapping their parameters. Include methods marked as lambdas.
         # The blackstone 'lambda' param is a heuristic, so we include them by default. There may be both synthetic and non-synthetic lambdas.
         if (access_flags & utils.ACC_SYNTHETIC) != 0 and not b_method['lambda']:
             continue
 
-        moj_method = b_method['name']['moj']
-        moj_desc = b_method['descriptor']['moj']
+        assert 'moj' in b_name, 'Missing mojmap for method: %s.%s%s' % (moj_class, obf_method, obf_desc)
+
+        moj_method = b_name['moj']
+        moj_desc = b_desc['moj']
 
         _, param_types = utils.split_method_descriptor(moj_desc)
 

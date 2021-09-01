@@ -2,8 +2,8 @@
 
 This is a pile of bodging scripts for playing around with Minecraft modding mappings, including working with Fabric Yarn, Intermediary, Official, and Parchment mappings. The primary purpose is to create an alternate mapping set for Forge mod development. This exists as an alternative to default Parchment mappings for several reasons:
 
-- Parchment does not include mappings for lambda methods or anonymous classes due to conflict resolution issues. Mappificator does, and uses a number of techniques to avoid conflicts between parameter names (see the `--improved-lambda-conflict-avoidance` argument).
-- Mappificator sources parameters names from multiple projects, including Parchment, Crane, and also Fabric Yarn.
+- Parchment does not include mappings for lambda methods or anonymous classes due to conflict resolution issues. Mappificator does, and uses a number of techniques to avoid conflicts between parameter names.
+- Mappificator can source parameters names from multiple projects, including Parchment, Crane, and also Fabric Yarn.
 - Missing parameter mappings are auto named based on their type for extra readability (e.g. `BlockPos p_28739483` maps to `BlockPos blockPos_`)
 - Mappificator adds cross-referencing comments from Yarn, populating methods, fields, and classes with comments identifying their respective Yarn name, if it exists.
 
@@ -20,7 +20,7 @@ Run `mappificator.py` with the working directory `/<Mappificator Project Folder>
 - `-p --publish` is required to publish the mappings to the user's maven local.
 - `-v --version` sets the output version. 
 
-Mappificator produces a parchment formatted mapping export. As of time of writing, the only way to use this is to use a custom ForgeGradle 5 fork. There are instructions on how to set this up in the [Parchment Discord](https://discord.com/invite/XXHhhPRUxs).
+Mappificator produces a parchment formatted mapping export. This can be used with Forge Gradle 5+ using [Librarian](https://github.com/ParchmentMC/Librarian/blob/dev/docs/FORGEGRADLE.md).
 
 In order to use this in a mod dev environment, you need to edit your `build.gradle`:
 
