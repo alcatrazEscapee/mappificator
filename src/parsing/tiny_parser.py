@@ -7,7 +7,7 @@ from util.parser import Parser
 
 
 def parse_tiny(text: str) -> Mappings:
-    parser = Parser(text)
+    parser = Parser(text + '\n')  # Hack for now, ensure that tiny has a trailing newline
 
     if parser.accept('tiny\t2\t0\t'):
         return parse_tiny_v2(parser)
@@ -83,7 +83,7 @@ def parse_tiny_v1(parser: Parser) -> Mappings:
             parser.expect('\t')
             parse_tiny_method(parser, mappings, mappings.add_class(clazz))
         else:
-            parser.error('Unexpected line')
+            parser.accept_until_including('\n')  # Tiny spec says to skip unrecognized lines
 
     return mappings
 
