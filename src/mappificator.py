@@ -27,6 +27,7 @@ def main():
 
     # Individual versions
     parser.add_argument('--mc-version', type=str, default='1.17.1', help='The Minecraft version')
+    parser.add_argument('--publish-mc-version', type=str, default=None, help='The Minecraft version to publish the mappings to. If omitted, will be the same as the --mc-version argument.')
     parser.add_argument('--parchment-version', type=str, default='2021.08.29', help='The parchment mappings version')
     parser.add_argument('--yarn-version', type=str, default='30', help='The fabric yarn mappings version')
     parser.add_argument('--crane-version', type=str, default='15', help='The architectury crane mappings version')
@@ -72,13 +73,14 @@ def main():
     create_merged_mappings(merged, *sources)
 
     print('Writing merged mappings')
-    parchmentmc.write_parchment(merged, args.mc_version, version, True)
+    output_mc_version = args.publish_mc_version if args.publish_mc_version is not None else args.mc_version
+    parchmentmc.write_parchment(merged, output_mc_version, version, True)
 
     if args.publish:
         print('Publishing to maven local')
-        parchmentmc.publish_parchment(args.mc_version, version)
+        parchmentmc.publish_parchment(output_mc_version, version)
 
-        print('Published to channel: \'parchment\' version: \'%s-%s\'' % (version, args.mc_version))
+        print('Published to channel: \'parchment\' version: \'%s-%s\'' % (version, output_mc_version))
 
 
 def remap_yarn_onto_mojmap(obf_to_moj: Mappings, method_inheritance: MethodInheritanceTree, intermediary: Mappings, yarn: Mappings) -> Mappings:
