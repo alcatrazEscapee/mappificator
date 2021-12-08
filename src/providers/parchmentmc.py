@@ -138,6 +138,10 @@ def parse_blackstone_class(b_class: Dict[str, Any], obf_to_moj: Mappings, method
     named_class = obf_to_moj.add_class(obf_class)
     named_class.mapped = moj_class
 
+    # Record flag
+    # If the class is a record, we include it for class remapping but we need to ignore it's canonical constructor.
+    named_class.record = utils.or_else(b_class, 'record', False)
+
     # Inner classes
     b_inners = utils.or_else(b_class, 'inner', [])
     for b_inner in b_inners:
@@ -167,6 +171,10 @@ def parse_blackstone_class(b_class: Dict[str, Any], obf_to_moj: Mappings, method
         b_desc = b_method['descriptor']
         obf_method = b_name['obf']
         obf_desc = b_desc['obf']
+
+        # Skip record constructors, we don't want to remap their parameters as it causes some funky bugs with FG.
+        if named_class.record and obf_method == '<init>':
+            continue
 
         access_flags = b_method['security']
 

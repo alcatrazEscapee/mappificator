@@ -41,6 +41,7 @@ class Mappings:
         docs: List[str]
         fields: Dict[Tuple[str, str], 'Mappings.Field']
         methods: Dict[Tuple[str, str], 'Mappings.Method']
+        record: bool
 
         def __init__(self, name: str):
             self.name = name
@@ -48,6 +49,7 @@ class Mappings:
             self.docs = []
             self.fields = {}
             self.methods = {}
+            self.record = False
 
         def __str__(self):
             return 'class %s%s' % (self.name, ' -> ' + self.mapped if self.mapped else '')

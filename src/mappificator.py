@@ -1,9 +1,10 @@
 # This is why we can't have nice things
 
 import re
+
 from argparse import ArgumentParser
 from collections import defaultdict
-from typing import Dict, Tuple, List, Set, Optional, Any
+from typing import Dict, Tuple, List, Set, Any
 
 from providers import fabricmc, parchmentmc, architectury
 from providers.parchmentmc import MethodInheritanceTree
@@ -26,9 +27,9 @@ def main():
     parser.add_argument('--yarn-mapping-comments', action='store_true', default=False, dest='yarn_mapping_comments', help='Enables adding javadoc comments to classes, fields, and methods with their corresponding yarn name, if present.')
 
     # Individual versions
-    parser.add_argument('--mc-version', type=str, default='1.17.1', help='The Minecraft version')
+    parser.add_argument('--mc-version', type=str, default='1.18', help='The Minecraft version')
     parser.add_argument('--publish-mc-version', type=str, default=None, help='The Minecraft version to publish the mappings to. If omitted, will be the same as the --mc-version argument.')
-    parser.add_argument('--parchment-version', type=str, default='2021.08.29', help='The parchment mappings version')
+    parser.add_argument('--parchment-version', type=str, default='2021.12.05-1.17.1', help='The parchment mappings version.')
     parser.add_argument('--yarn-version', type=str, default='30', help='The fabric yarn mappings version')
     parser.add_argument('--crane-version', type=str, default='15', help='The architectury crane mappings version')
 
@@ -43,6 +44,11 @@ def main():
         if 'yarn' in args.providers:
             version += '-y%s' % args.yarn_version
 
+    parchment_version = args.parchment_version
+    parchment_mc_version = args.mc_version
+    if '-' in parchment_version:
+        parchment_version, parchment_mc_version = parchment_version.split('-')
+
     sources = []
 
     print('Loading blackstone')
@@ -50,7 +56,7 @@ def main():
 
     if 'parchment' in args.providers:
         print('Loading parchment')
-        parchment = parchmentmc.read_parchment(args.mc_version, args.parchment_version)
+        parchment = parchmentmc.read_parchment(parchment_mc_version, parchment_version)
         sources.append(parchment)
 
     if 'crane' in args.providers:
@@ -243,9 +249,11 @@ def generate_param_name(param_type: str) -> str:
     if '/' in name:  # Remove packages
         name = name.split('/')[-1]
     if '$' in name:  # Remove inner classes
-        name = name.split('$')[-1]
+        name = next(c for c in name.split('$')[::-1] if not c.isnumeric())  # First non-completely-numeric inner class (i.e. Bar$Foo$1)
+        name = name.lstrip('0123456789')  # strip of numeric values off the start. This can happen when the class is a nested record class, i.e. Foo$1Bar
     if arrays > 0:  # Add 'Array' for array levels
         name += 'Array'
+    assert len(name) > 0 and name[0].isalpha(), 'Tried to generate an invalid identifier as a parameter name: ' + name + ' from ' + param_type
     name = name[0].lower() + name[1:]  # lowerCamelCase
     name = name.rstrip('0123456789')  # strip numeric values off the end by default
     return name
