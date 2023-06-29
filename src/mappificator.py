@@ -23,13 +23,13 @@ def main():
     parser.add_argument('-p', '--publish', action='store_true', dest='publish', default=False, help='Publish the export to the user\'s maven local')
 
     # Options
-    parser.add_argument('--providers', nargs='+', choices=('parchment', 'crane', 'yarn'), default=('parchment',), help='Providers to source mappings from.')
+    parser.add_argument('--providers', nargs='*', choices=('parchment', 'crane', 'yarn'), default=('parchment',), help='Providers to source mappings from.')
     parser.add_argument('--yarn-mapping-comments', action='store_true', default=False, dest='yarn_mapping_comments', help='Enables adding javadoc comments to classes, fields, and methods with their corresponding yarn name, if present.')
 
     # Individual versions
-    parser.add_argument('--mc-version', type=str, default='1.18', help='The Minecraft version')
+    parser.add_argument('--mc-version', type=str, default='1.20.1', help='The Minecraft version')
     parser.add_argument('--publish-mc-version', type=str, default=None, help='The Minecraft version to publish the mappings to. If omitted, will be the same as the --mc-version argument.')
-    parser.add_argument('--parchment-version', type=str, default='2021.12.05-1.17.1', help='The parchment mappings version.')
+    parser.add_argument('--parchment-version', type=str, default='2023.06.26-1.20.1', help='The parchment mappings version.')
     parser.add_argument('--yarn-version', type=str, default='30', help='The fabric yarn mappings version')
     parser.add_argument('--crane-version', type=str, default='15', help='The architectury crane mappings version')
 
