@@ -121,7 +121,7 @@ def parse_parchment(parchment: Dict[str, Any], named: Mappings):
             for p_parameter in p_parameters:
                 named_parameter = named.add_parameter(named_class, named_method, p_parameter['index'])
                 named_parameter.mapped = utils.or_else(p_parameter, 'name')
-                named_parameter.doc = utils.or_else(p_parameter, 'javadoc')
+                named_parameter.docs = utils.or_else(p_parameter, 'javadoc', '').split('\n')
 
 
 def parse_blackstone(blackstone: Dict[str, Any], obf_to_moj: Mappings, method_inheritance: MethodInheritanceTree):
